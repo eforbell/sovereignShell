@@ -49,9 +49,14 @@ New native apps can join later as more targets on the same package. Nothing lock
 
 ## The open risk: passkeys inside an app's web view
 
-Home-screen web apps run in Safari, which may use passkeys for any site, from any provider such as 1Password. A `WKWebView` inside a third-party app is different. As we understand it, WebKit only lets it use passkeys for domains in the app's associated domains. Apple confirms those through its CDN, which can't reach a tailnet hostname.
+Home-screen web apps run in Safari, which may use passkeys for any site, from any provider such as 1Password. A `WKWebView` inside a third-party app is different. Apple's passkey documentation says such a web view can use passkeys only for domains in the app's associated domains.
 
-If that holds, unlocking administration inside the app's web view fails. The likely way through is to run the ceremony where Safari's rules apply:
+That's out of reach for us:
+- Home Base registers passkeys for the **tailnet domain** (`rpID` is the ingress domain, such as `example.ts.net`), not for its own hostname.
+- An app can claim a domain only if that domain serves Apple's association file. Normally Apple's CDN fetches it, and its development and managed-device modes only change how it's fetched.
+- Nothing serves the bare tailnet domain, so no build or distribution mode makes the claim valid.
+
+So unlocking administration inside the app's web view is expected to fail. The likely way through is to run the ceremony where Safari's rules apply:
 1. `ASWebAuthenticationSession` opens the passkey step.
 2. Home Base returns a one-time ticket to the app through a callback.
 3. The app's web view exchanges the ticket for its session.
@@ -67,7 +72,7 @@ Each phase lands as small PRs touching few files.
 | | Question | Expected | How |
 |---|---|---|---|
 | a | Does a native request and a web view on the tailnet hostname get the caller's identity from `/api/home`? | Yes | Fetch natively and load `/` in a web view; compare the `state` and caller |
-| b | Can the in-app web view use a passkey (1Password or iCloud Keychain) on Home Base? | No, but confirm | Unlock administration in the web view; also a direct `navigator.credentials.get` probe showing the exact error |
+| b | Can the in-app web view use a passkey (1Password or iCloud Keychain) on Home Base? | No, but confirm | Unlock administration in the web view; also a direct `navigator.credentials.get` probe, scoped to the tailnet domain, showing the exact error |
 | c | Does `ASWebAuthenticationSession` run Home Base's passkey unlock, YubiKey included? | Yes | Open Admin in a session and unlock |
 | d | Does `SFSafariViewController` run it? | Yes | Same, in a Safari view |
 
