@@ -78,6 +78,19 @@ Each phase lands as small PRs touching few files.
 
 Run them from a TestFlight build on a real phone. Write the results into this document before phase 3.
 
+**Results (2026-11-18, iOS 26.7, TestFlight):**
+
+| | Result |
+|---|---|
+| a | The web view identified the member over the tailnet. The native request got `403 fetch_metadata_missing`, which is fixed by sending first-party fetch metadata (see phase 2 findings). |
+| b | **Fails**, as expected: the app's web view can't use passkeys scoped to the tailnet domain. |
+| c | **Unlock works**, with passkeys and hardware keys. The session can't return to the app yet, because Home Base has no return link: it ended only when cancelled (`WebAuthenticationSession` error 1). That return link is exactly what phase 3's handoff adds. |
+| d | **Works**, with passkeys and hardware keys. |
+
+Phase 3 chooses between:
+- **c plus a handoff:** the session ends on a one-time ticket, and the app's web view redeems it for a session. This needs a Home Base change, and admin stays in the app's web view.
+- **d alone:** administration and other step-up pages live in a Safari view, with no Home Base change. The Safari view has its own cookies, which persist across launches.
+
 ### 1. Scaffold
 
 - The package and the app target (XcodeGen).
@@ -93,6 +106,14 @@ Run them from a TestFlight build on a real phone. Write the results into this do
 - Apps open in an in-app web view. Links to other sites open in Safari.
 - An administrator gets "Open Admin" in a web view.
 - No changes to Home Base.
+
+**Found while building it (2026-11-18):**
+- **Fetch metadata.** Home Base's hostname is strict (sovereignAuth wire contract §4.1), so it refuses any request without fetch metadata. A plain native request got `403 fetch_metadata_missing` from a real install.
+  - The client now sends what Home Base's own pages send for an API call: `Sec-Fetch-Site: same-origin`, `Sec-Fetch-Mode: cors`, `Sec-Fetch-Dest: empty`.
+  - That guard keeps browser sites apart. It isn't authentication, and no web page can drive the app's native requests.
+  - The web view's own page loads are ordinary navigations and pass unchanged.
+  - Tested against a real install: `/api/home` answered 200, and the response decoded.
+- **Admin opens in a Safari view for now.** The app's web view can't use passkeys scoped to the tailnet domain (see above), and Safari can. Phase 3 may change this.
 
 ### 3. Step-up passkeys
 
