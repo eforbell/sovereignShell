@@ -1,0 +1,6 @@
+// Defaults that name no real team or household. Override them in Local.xcconfig (gitignored),
+// which is included last so its values win. See Local.xcconfig.example.
+SHELL_HOMEBASE_BUNDLE_ID = org.example.homebase
+SHELL_HOMEBASE_DISPLAY_NAME = Home Base
+
+#include? "Local.xcconfig"

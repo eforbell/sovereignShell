@@ -1,0 +1,7 @@
+// Copy to Local.xcconfig and fill in. Local.xcconfig is gitignored.
+// Team ID: developer.apple.com/account -> Membership details (10 characters).
+DEVELOPMENT_TEAM = ABCDE12345
+
+// The App ID you registered for Home Base, and the name under its icon.
+SHELL_HOMEBASE_BUNDLE_ID = org.yourhousehold.homebase
+SHELL_HOMEBASE_DISPLAY_NAME = Home Base
