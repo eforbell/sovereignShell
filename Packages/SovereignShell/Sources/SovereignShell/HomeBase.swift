@@ -111,6 +111,16 @@ public struct HomeBaseClient: Sendable {
     public let address: HomeBaseAddress
     private let session: URLSession
 
+    /// Home Base's hostname is strict (sovereignAuth wire contract §4.1): it refuses any request without
+    /// fetch metadata, which browsers send and URLSession doesn't. This app is Home Base's own client, so it
+    /// says what Home Base's own pages say when they call its API. The guard isolates browser sites from one
+    /// another; it isn't authentication, and no web page can make these native requests.
+    static let firstPartyFetchMetadata = [
+        "Sec-Fetch-Site": "same-origin",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Dest": "empty",
+    ]
+
     public init(address: HomeBaseAddress, session: URLSession = .shared) {
         self.address = address
         self.session = session
@@ -121,6 +131,7 @@ public struct HomeBaseClient: Sendable {
         request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
         request.timeoutInterval = 10
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        for (name, value) in Self.firstPartyFetchMetadata { request.setValue(value, forHTTPHeaderField: name) }
         let data: Data
         let response: URLResponse
         do {
