@@ -151,6 +151,7 @@ private struct WebSpikeSheet: View {
         NavigationStack {
             ShellWebView(url: page.url, householdHosts: [host]) { created in
                 relay.report = report
+                relay.host = host
                 created.configuration.userContentController.add(relay, name: "spike")
                 // Called while SwiftUI builds the view: keep the reference on the next turn instead.
                 Task { @MainActor in webView = created }
@@ -169,8 +170,9 @@ private struct WebSpikeSheet: View {
         .onDisappear { webView?.configuration.userContentController.removeScriptMessageHandler(forName: "spike") }
     }
 
-    /// Puts a button on the page. Tapping it asks for any passkey for this host and reports the outcome.
-    /// A returned credential is described, never sent anywhere.
+    /// Puts a button on the page. Tapping it asks for any passkey Home Base could use and reports the outcome.
+    /// Home Base registers passkeys for the tailnet domain (its hostname minus the first label), not for its
+    /// own hostname, so that's the scope asked for. A returned credential is described, never sent anywhere.
     static let probeButton = """
     (() => {
       if (document.getElementById('spike-probe')) return;
@@ -179,14 +181,15 @@ private struct WebSpikeSheet: View {
       b.textContent = 'Run passkey probe';
       b.style.cssText = 'position:fixed;left:16px;right:16px;bottom:24px;z-index:99999;padding:14px;font-size:17px;border-radius:12px;border:0;background:#4f7eff;color:#fff';
       b.addEventListener('click', async () => {
-        const out = { origin: location.origin, secureContext: window.isSecureContext,
+        const rpId = location.hostname.split('.').slice(1).join('.');
+        const out = { origin: location.origin, rpId, secureContext: window.isSecureContext,
                       publicKeyCredential: typeof PublicKeyCredential !== 'undefined' };
         if (out.publicKeyCredential) {
           try { out.platformAuthenticator = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable(); }
           catch (e) { out.platformAuthenticator = String(e); }
           try {
             const cred = await navigator.credentials.get({ publicKey: {
-              challenge: crypto.getRandomValues(new Uint8Array(32)), rpId: location.hostname,
+              challenge: crypto.getRandomValues(new Uint8Array(32)), rpId,
               userVerification: 'preferred', timeout: 60000 } });
             out.get = cred ? 'returned a credential (' + cred.type + ')' : 'returned null';
           } catch (e) { out.get = (e && e.name) + ': ' + (e && e.message); }
@@ -204,8 +207,12 @@ private struct WebSpikeSheet: View {
 @MainActor
 private final class ProbeRelay: NSObject, WKScriptMessageHandler {
     var report: (String) -> Void = { _ in }
+    var host = ""
 
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+        // Only the Home Base page itself may report; an embedded frame could otherwise forge a result.
+        guard message.frameInfo.isMainFrame, message.frameInfo.securityOrigin.protocol == "https",
+              message.frameInfo.securityOrigin.host == host else { return }
         report("probe: \(message.body)")
     }
 }

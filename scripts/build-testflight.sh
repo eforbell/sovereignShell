@@ -17,8 +17,9 @@ TEAM=$(setting DEVELOPMENT_TEAM)
 BUNDLE=$(setting SHELL_HOMEBASE_BUNDLE_ID)
 [[ "$TEAM" =~ ^[A-Z0-9]{10}$ && "$TEAM" != ABCDE12345 ]] || { echo "Set DEVELOPMENT_TEAM in Config/Local.xcconfig first (see Local.xcconfig.example)." >&2; exit 1; }
 [[ -n "$BUNDLE" && "$BUNDLE" != org.example.* && "$BUNDLE" != org.yourhousehold.* ]] || { echo "Set SHELL_HOMEBASE_BUNDLE_ID in Config/Local.xcconfig to your registered App ID." >&2; exit 1; }
-# Two-part build number (YYYYMMDD.HHMM): always increasing, which App Store Connect requires per version.
-BUILD=$(date -u +%Y%m%d.%H%M)
+# Three-part build number (YYYYMMDD.HHMM.SS): always increasing, which App Store Connect requires per
+# version, and distinct for two runs in the same minute.
+BUILD=$(date -u +%Y%m%d.%H%M.%S)
 AUTH=()
 if [ -n "${ASC_KEY_PATH:-}" ]; then
   AUTH=(-authenticationKeyPath "$ASC_KEY_PATH" -authenticationKeyID "${ASC_KEY_ID:?}" -authenticationKeyIssuerID "${ASC_ISSUER_ID:?}")
