@@ -53,9 +53,11 @@ public struct ShellWebView: UIViewRepresentable {
 
         public func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction) async -> WKNavigationActionPolicy {
             guard let url = action.request.url else { return .cancel }
-            // Subframes follow the page's own rules; only top-level navigation is routed.
-            guard action.targetFrame?.isMainFrame ?? true else { return .allow }
-            switch LinkRoute.of(url, householdHosts: householdHosts) {
+            let route = LinkRoute.of(url, householdHosts: householdHosts)
+            // Frames inside a page may embed other sites, but never blocked schemes (a data: frame runs script).
+            // Only top-level navigation is sent out to Safari.
+            guard action.targetFrame?.isMainFrame ?? true else { return route == .block ? .cancel : .allow }
+            switch route {
             case .stay: return .allow
             case .external:
                 await UIApplication.shared.open(url)

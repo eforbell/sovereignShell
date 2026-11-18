@@ -1,6 +1,8 @@
 import Foundation
 
 /// Where a link should go. Pure so it can be tested without a web view.
+/// This routes navigations; it is not a script sandbox. WebKit runs a clicked `javascript:` link without
+/// asking the navigation delegate, so household pages are trusted to run their own script, as in Safari.
 public enum LinkRoute: Equatable, Sendable {
     /// Load it in this web view.
     case stay
