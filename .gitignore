@@ -1,0 +1,18 @@
+# Operator identity (team, bundle ID) and keys never go in git
+Config/Local.xcconfig
+*.p8
+*.pem
+*.mobileprovision
+.env
+
+# Generated
+*.xcodeproj/
+build/
+DerivedData/
+xcuserdata/
+.build/
+.swiftpm/
+
+.DS_Store
+.omc/
+.omx/
