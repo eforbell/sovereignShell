@@ -1,5 +1,4 @@
 import AuthenticationServices
-import SafariServices
 import SovereignShell
 import SwiftUI
 import WebKit
@@ -215,10 +214,4 @@ private final class ProbeRelay: NSObject, WKScriptMessageHandler {
               message.frameInfo.securityOrigin.host == host else { return }
         report("probe: \(message.body)")
     }
-}
-
-private struct SafariView: UIViewControllerRepresentable {
-    let url: URL
-    func makeUIViewController(context: Context) -> SFSafariViewController { SFSafariViewController(url: url) }
-    func updateUIViewController(_ controller: SFSafariViewController, context: Context) {}
 }

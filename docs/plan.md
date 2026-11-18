@@ -94,6 +94,14 @@ Run them from a TestFlight build on a real phone. Write the results into this do
 - An administrator gets "Open Admin" in a web view.
 - No changes to Home Base.
 
+**Found while building it (2026-11-18):**
+- **Fetch metadata.** Home Base's hostname is strict (sovereignAuth wire contract §4.1), so it refuses any request without fetch metadata. A plain native request got `403 fetch_metadata_missing` from a real install.
+  - The client now sends what Home Base's own pages send for an API call: `Sec-Fetch-Site: same-origin`, `Sec-Fetch-Mode: cors`, `Sec-Fetch-Dest: empty`.
+  - That guard keeps browser sites apart. It isn't authentication, and no web page can drive the app's native requests.
+  - The web view's own page loads are ordinary navigations and pass unchanged.
+  - Tested against a real install: `/api/home` answered 200, and the response decoded.
+- **Admin opens in a Safari view for now.** The app's web view can't use passkeys scoped to the tailnet domain (see above), and Safari can. Phase 3 may change this.
+
 ### 3. Step-up passkeys
 
 - The handoff chosen by spikes b–d.
