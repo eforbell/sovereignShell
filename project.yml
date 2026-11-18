@@ -1,0 +1,35 @@
+# XcodeGen spec. Generate the project with:  xcodegen generate   (the .xcodeproj is a build artifact)
+# Operator identity (team, bundle ID, display name) comes from Config/Local.xcconfig, never from here.
+name: SovereignShell
+options:
+  deploymentTarget:
+    iOS: "18.0"
+  createIntermediateGroups: true
+configFiles:
+  Debug: Config/Shell.xcconfig
+  Release: Config/Shell.xcconfig
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    CODE_SIGN_STYLE: Automatic
+    TARGETED_DEVICE_FAMILY: "1"   # iPhone only for now
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+packages:
+  SovereignShell:
+    path: Packages/SovereignShell
+targets:
+  HomeBase:
+    type: application
+    platform: iOS
+    sources:
+      - Apps/HomeBase
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(SHELL_HOMEBASE_BUNDLE_ID)
+        PRODUCT_NAME: HomeBase
+        INFOPLIST_FILE: Apps/HomeBase/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    dependencies:
+      - package: SovereignShell

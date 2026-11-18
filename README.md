@@ -14,6 +14,18 @@ The first app built on it is **Home Base**: a native launcher and onboarding scr
 
 Nothing that names a particular household or Apple team is committed. Your Apple Team ID and bundle ID go in `Config/Local.xcconfig`, which is gitignored. Household addresses are entered in the app at first launch, never compiled in.
 
+## Build Home Base
+
+You need Xcode, [XcodeGen](https://github.com/yonaskolb/XcodeGen) and a paid Apple Developer Program membership.
+
+1. Register an App ID for Home Base at developer.apple.com (no extra capabilities yet).
+2. Create its app record in App Store Connect, with that bundle ID.
+3. Run `cp Config/Local.xcconfig.example Config/Local.xcconfig`, then fill in your Team ID and bundle ID.
+4. Run `scripts/build-testflight.sh --no-upload` to check signing, then `scripts/build-testflight.sh` to upload.
+5. Add the build to your internal testing group. TestFlight builds expire after 90 days.
+
+For local work, `xcodegen generate` then open `SovereignShell.xcodeproj`. Package tests: `cd Packages/SovereignShell && swift test`.
+
 ## License
 
 MIT
