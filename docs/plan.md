@@ -78,6 +78,19 @@ Each phase lands as small PRs touching few files.
 
 Run them from a TestFlight build on a real phone. Write the results into this document before phase 3.
 
+**Results (2026-11-18, iOS 26.7, TestFlight):**
+
+| | Result |
+|---|---|
+| a | The web view identified the member over the tailnet. The native request got `403 fetch_metadata_missing`, which is fixed by sending first-party fetch metadata (see phase 2 findings). |
+| b | **Fails**, as expected: the app's web view can't use passkeys scoped to the tailnet domain. |
+| c | **Unlock works**, with passkeys and hardware keys. The session can't return to the app yet, because Home Base has no return link: it ended only when cancelled (`WebAuthenticationSession` error 1). That return link is exactly what phase 3's handoff adds. |
+| d | **Works**, with passkeys and hardware keys. |
+
+Phase 3 chooses between:
+- **c plus a handoff:** the session ends on a one-time ticket, and the app's web view redeems it for a session. This needs a Home Base change, and admin stays in the app's web view.
+- **d alone:** administration and other step-up pages live in a Safari view, with no Home Base change. The Safari view has its own cookies, which persist across launches.
+
 ### 1. Scaffold
 
 - The package and the app target (XcodeGen).
