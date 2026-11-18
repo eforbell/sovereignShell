@@ -64,17 +64,53 @@ private let waiting = home(#"{"state":"waiting","caller":{"login":"a@b"},"canUnl
         #expect(model.pollInterval == nil)
     }
 
-    @Test func aRefreshDuringARefreshIsDropped() async {
+    @Test func aFailedCheckWhileWaitingKeepsPolling() async {
+        let script = Script([.success(waiting), .failure(.unreachable("timed out")), .failure(.http(503)), .success(member)])
+        let model = HomeModel(fetch: { () async throws(HomeBaseError) -> HouseholdHome in try await script.next() })
+        await model.refresh()
+        await model.refresh()
+        #expect(model.phase == .failed(.unreachable("timed out")))
+        #expect(model.pollInterval == .seconds(10))
+        await model.refresh()
+        #expect(model.pollInterval == .seconds(10))
+        await model.refresh()
+        #expect(model.phase == .loaded(member))
+        #expect(model.pollInterval == nil)
+    }
+
+    @Test func aRefreshDuringARefreshSharesIt() async {
         let script = Script([.success(member)], holds: true)
         let model = HomeModel(fetch: { () async throws(HomeBaseError) -> HouseholdHome in try await script.next() })
         let first = Task { await model.refresh() }
         while !(await script.waiting) { await Task.yield() }
         #expect(model.isRefreshing)
-        await model.refresh()  // returns at once: one is already out
+        let second = Task { await model.refresh() }
+        await Task.yield()
         #expect(await script.calls == 1)
         await script.release()
         await first.value
+        await second.value
+        #expect(await script.calls == 1)
         #expect(model.phase == .loaded(member))
+        #expect(!model.isRefreshing)
+    }
+
+    @Test func cancellingTheCallerDoesntCancelTheCheck() async {
+        let script = Script([.success(member), .success(member)], holds: true)
+        let model = HomeModel(fetch: { () async throws(HomeBaseError) -> HouseholdHome in try await script.next() })
+        let poll = Task { await model.refresh() }
+        while !(await script.waiting) { await Task.yield() }
+        poll.cancel()  // the app left the screen mid-check
+        await script.release()
+        await poll.value
+        #expect(model.phase == .loaded(member))
+        #expect(!model.isRefreshing)
+        // The next refresh (the app coming back) makes its own request.
+        let again = Task { await model.refresh() }
+        while !(await script.waiting) { await Task.yield() }
+        await script.release()
+        await again.value
+        #expect(await script.calls == 2)
     }
 
     @Test func householdHostsAreHomeBaseAndTheMembersApps() async throws {
