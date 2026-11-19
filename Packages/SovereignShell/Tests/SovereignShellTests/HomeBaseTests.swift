@@ -92,3 +92,20 @@ import Testing
         #expect(LinkRoute.of(try #require(URL(string: link)), householdHosts: hosts) == expected)
     }
 }
+
+@Suite struct TrustScopeTests {
+    @Test func theTailnetDomainComesFromHomeBasesAddress() throws {
+        let address = try #require(HomeBaseAddress("smith-homebase.example-tailnet.ts.net"))
+        #expect(address.trustDomain == "example-tailnet.ts.net")
+        #expect(address.trustCovers("smith-homebase.example-tailnet.ts.net"))
+        #expect(address.trustCovers("SMITH-PULSE.example-tailnet.ts.net"), "every household service, whatever /api/home says")
+        #expect(address.trustCovers("example-tailnet.ts.net"))
+        #expect(!address.trustCovers("example-tailnet.ts.net.attacker.example"))
+        #expect(!address.trustCovers("notexample-tailnet.ts.net"))
+        #expect(!address.trustCovers("www.apple.com"))
+        let short = try #require(HomeBaseAddress("homebase.lan"))
+        #expect(short.trustDomain == "homebase.lan")
+        #expect(short.trustCovers("homebase.lan") && !short.trustCovers("other.lan"))
+    }
+}
+

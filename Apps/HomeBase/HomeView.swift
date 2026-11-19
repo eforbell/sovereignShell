@@ -37,7 +37,7 @@ struct HomeView: View {
             if phase == .active { Task { await model.refresh() } }
         }
         .fullScreenCover(item: $page) { page in
-            AppBrowser(page: page, householdHosts: model.householdHosts(homeBase: address))
+            AppBrowser(page: page, householdHosts: model.householdHosts(homeBase: address), homeBase: address)
         }
         .sheet(item: $safariPage) { page in SafariView(url: page.url).ignoresSafeArea() }
         .confirmationDialog("Change household?", isPresented: $confirmChange, titleVisibility: .visible) {

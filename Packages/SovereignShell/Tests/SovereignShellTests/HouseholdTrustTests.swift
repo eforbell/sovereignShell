@@ -52,4 +52,21 @@ import Testing
         #expect(bundled.anchors == [try Self.fixture("test-root")])
         #expect(bundled.evaluate(try Self.serverTrust(), host: Self.host, at: Self.date))
     }
+
+    /// A chain the system trusts (www.apple.com, to DigiCert's root in the system store) must still fail
+    /// when only ISRG is pinned: the system's roots don't count. The control proves the system would pass it.
+    @Test func aChainTheSystemTrustsFailsWhenItsRootIsntPinned() throws {
+        let leaf = try #require(SecCertificateCreateWithData(nil, try Self.fixture("public-leaf") as CFData))
+        let intermediate = try #require(SecCertificateCreateWithData(nil, try Self.fixture("public-intermediate") as CFData))
+        func publicTrust() throws -> SecTrust {
+            var trust: SecTrust?
+            #expect(SecTrustCreateWithCertificates([leaf, intermediate] as CFArray, SecPolicyCreateSSL(true, "www.apple.com" as CFString), &trust) == errSecSuccess)
+            return try #require(trust)
+        }
+        let control = try publicTrust()
+        #expect(SecTrustSetVerifyDate(control, Self.date as CFDate) == errSecSuccess)
+        #expect(SecTrustEvaluateWithError(control, nil), "the system trusts this chain")
+        let pinned = HouseholdTrust(anchors: [try Self.fixture("isrg-root-x1")])
+        #expect(!pinned.evaluate(try publicTrust(), host: "www.apple.com", at: Self.date))
+    }
 }

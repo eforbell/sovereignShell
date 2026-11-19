@@ -25,6 +25,21 @@ public struct HomeBaseAddress: Hashable, Codable, Sendable {
 
     public var host: String { url.host() ?? "" }
 
+    /// The domain household trust covers: Home Base's host without its first label (the tailnet's domain,
+    /// as `smith-homebase.example-tailnet.ts.net` gives `example-tailnet.ts.net`), where every household
+    /// service has its hostname. Taken from the address alone, so it never depends on what Home Base answers.
+    public var trustDomain: String {
+        let labels = host.split(separator: ".")
+        return labels.count >= 3 ? labels.dropFirst().joined(separator: ".") : host
+    }
+
+    /// Whether `host` is held to household trust: Home Base's own host, or any host under `trustDomain`.
+    public func trustCovers(_ host: String) -> Bool {
+        let host = host.lowercased()
+        let domain = trustDomain
+        return host == self.host || host == domain || host.hasSuffix("." + domain)
+    }
+
     /// A path under Home Base, e.g. `api/home` or `admin`.
     public func resolving(_ path: String) -> URL {
         url.appending(path: path)
