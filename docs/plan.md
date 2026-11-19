@@ -131,6 +131,10 @@ The handoff: the web view asks the app to run a passkey ceremony in an ephemeral
 
 The pin set needs Root YE and Root YR once Apple trusts them, before Let's Encrypt drops the X2 cross-sign.
 
+**Built (2026-11-19):** sovereignAuth #12 and #13, Home Base #66–#70, and this repo's slice 6:
+- **6a, household trust:** household hosts load only over the pinned authorities, for the app's own requests and in the web view. The phase 3 spike screen is gone.
+- **6b, the handoff:** on first use the app registers this installation with an App Attest key. Household pages get `window.sovereign` (version 1) in their main frame. `handoff(id)` attests the id to the page's own host, opens the ephemeral sheet, and resolves when it returns to the app's callback scheme (its bundle ID), or rejects with `cancelled`, `unavailable` or why. Admin opens in the app, and unlocking it goes through the sheet. Registering a passkey stays in Safari, from the menu.
+
 ### 4. Enrollment without passing codes
 
 - The administrator issues a passkey grant on the Members card, as today.
