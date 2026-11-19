@@ -124,10 +124,10 @@ The handoff: the web view asks the app to run a passkey ceremony in an ephemeral
 | | Result |
 |---|---|
 | 1 · App Attest | **Works in production.** A Node prototype of the server checks passed all 22 (Apple chain, nonce, key ID, App ID hash, production environment, receipt, three assertions with rising counters), and the controls failed as they should. |
-| 2 · Ephemeral sheet | **Works** with 1Password and a YubiKey over USB-C. Not yet recorded: iCloud Keychain, YubiKey over NFC, and whether the sign-in alert is skipped. |
+| 2 · Ephemeral sheet | **Works** with 1Password and a YubiKey over USB-C. Not tested: iCloud Keychain (used before in the same kind of sheet), YubiKey over NFC (none available), and whether the sign-in alert is skipped. |
 | 3 · Sheet identity | **Same member** in the sheet as in a native request. |
 | 4 · Sheet closing | Folded into Home Base slice 4: the sheet page navigates to the callback and always shows a return button too. |
-| 5 · Pinning | **Holds.** Refusing every anchor blocked both the native request and the web view's load. The ISRG anchors passed on *leaf ← YE2 ← Root YE ← ISRG Root X2*. The pinned web view's own load wasn't captured. |
+| 5 · Pinning | **Holds.** Refusing every anchor blocked both the native request and the web view's load. The ISRG anchors passed on *leaf ← YE2 ← Root YE ← ISRG Root X2*. With them, the web view loaded Home Base on one passed challenge (all 12 resources shared the connection), and the page's `fetch` of `/api/home` returned 200. |
 
 The pin set needs Root YE and Root YR once Apple trusts them, before Let's Encrypt drops the X2 cross-sign.
 
