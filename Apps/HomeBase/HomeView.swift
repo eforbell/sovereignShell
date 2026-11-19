@@ -41,7 +41,7 @@ struct HomeView: View {
             AppBrowser(page: page, householdHosts: model.householdHosts(homeBase: address))
         }
         .sheet(item: $safariPage) { page in SafariView(url: page.url).ignoresSafeArea() }
-        .sheet(isPresented: $showSpikes) { SpikeView() }
+        .sheet(isPresented: $showSpikes) { HandoffSpikeView() }
         .confirmationDialog("Change household?", isPresented: $confirmChange, titleVisibility: .visible) {
             Button("Change household", role: .destructive, action: changeHousehold)
         } message: {
@@ -223,7 +223,7 @@ struct HomeView: View {
             Button("Open Home Base on the web", systemImage: "globe") {
                 page = BrowserPage(title: "Home Base", url: address.url, kind: .inApp)
             }
-            Button("Spikes (phase 0)", systemImage: "testtube.2") { showSpikes = true }
+            Button("Spikes (phase 3)", systemImage: "testtube.2") { showSpikes = true }
             Divider()
             Button("Change household…", systemImage: "arrow.left.arrow.right") { confirmChange = true }
         } label: {
