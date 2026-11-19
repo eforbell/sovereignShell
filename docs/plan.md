@@ -135,7 +135,7 @@ The pin set needs Root YE and Root YR once Apple trusts them, before Let's Encry
 - **6a, household trust:** household hosts load only over the pinned authorities, for the app's own requests and in the web view. The phase 3 spike screen is gone.
 - **6b, the handoff:** on first use the app registers this installation with an App Attest key. Household pages get `window.sovereign` (version 1) in their main frame. `handoff(id)` attests the id to the page's own host, opens the ephemeral sheet, and resolves when it returns to the app's callback scheme (its bundle ID), or rejects with `cancelled`, `unavailable` or why. Admin opens in the app, and unlocking it goes through the sheet. Registering a passkey stays in Safari, from the menu.
 
-**Verified on a phone (2026-11-19, TestFlight):** unlocking Home Base's Admin and a sensitive app's passkey check both ran through the handoff inside the app: registration on first use, App Attest, the sheet, and the result back in the web view.
+**Verified on a phone (2026-11-19, TestFlight):** unlocking Home Base's Admin and a sensitive app's passkey check both ran through the handoff inside the app: registration on first use, App Attest, the sheet, and the result back in the web view. In homeSource, a check with a YubiKey over USB-C in the sheet worked too.
 
 Not yet tried on the phone:
 - an every-time action, which uses the same path with a hardware key;
