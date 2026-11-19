@@ -19,7 +19,7 @@ struct AppBrowser: View {
 
     var body: some View {
         NavigationStack {
-            ShellWebView(url: page.url, householdHosts: householdHosts)
+            ShellWebView(url: page.url, householdHosts: householdHosts, trust: householdTrust)
                 .ignoresSafeArea(edges: .bottom)
                 .navigationTitle(page.title)
                 .navigationBarTitleDisplayMode(.inline)

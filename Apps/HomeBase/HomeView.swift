@@ -10,14 +10,13 @@ struct HomeView: View {
     @State private var model: HomeModel
     @State private var page: BrowserPage?
     @State private var safariPage: BrowserPage?
-    @State private var showSpikes = false
     @State private var confirmChange = false
     @Environment(\.scenePhase) private var scenePhase
 
     init(address: HomeBaseAddress, changeHousehold: @escaping () -> Void) {
         self.address = address
         self.changeHousehold = changeHousehold
-        _model = State(initialValue: HomeModel(client: HomeBaseClient(address: address)))
+        _model = State(initialValue: HomeModel(client: HomeBaseClient(address: address, trust: householdTrust)))
     }
 
     var body: some View {
@@ -41,7 +40,6 @@ struct HomeView: View {
             AppBrowser(page: page, householdHosts: model.householdHosts(homeBase: address))
         }
         .sheet(item: $safariPage) { page in SafariView(url: page.url).ignoresSafeArea() }
-        .sheet(isPresented: $showSpikes) { HandoffSpikeView() }
         .confirmationDialog("Change household?", isPresented: $confirmChange, titleVisibility: .visible) {
             Button("Change household", role: .destructive, action: changeHousehold)
         } message: {
@@ -181,6 +179,8 @@ struct HomeView: View {
         let (title, message): (String, String) = switch error {
         case .unreachable:
             ("Can't reach your household", "Make sure this phone is connected to your household's tailnet in the Tailscale app, then try again. If it still fails, check the address with your administrator.")
+        case .untrusted:
+            ("Can't verify your household's certificate", "Home Base didn't present a certificate from the authorities this app trusts for your household, so the app didn't use the connection. If your household changed its certificate authority, this app needs an update.")
         case .http(let status):
             ("Home Base had a problem", "It answered with an error (\(status)). Try again in a moment.")
         case .unreadable:
@@ -223,7 +223,6 @@ struct HomeView: View {
             Button("Open Home Base on the web", systemImage: "globe") {
                 page = BrowserPage(title: "Home Base", url: address.url, kind: .inApp)
             }
-            Button("Spikes (phase 3)", systemImage: "testtube.2") { showSpikes = true }
             Divider()
             Button("Change household…", systemImage: "arrow.left.arrow.right") { confirmChange = true }
         } label: {
