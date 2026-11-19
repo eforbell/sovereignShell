@@ -113,12 +113,23 @@ Phase 3 chooses between:
   - That guard keeps browser sites apart. It isn't authentication, and no web page can drive the app's native requests.
   - The web view's own page loads are ordinary navigations and pass unchanged.
   - Tested against a real install: `/api/home` answered 200, and the response decoded.
-- **Admin opens in a Safari view for now.** The app's web view can't use passkeys scoped to the tailnet domain (see above), and Safari can. Phase 3 may change this.
+- **Admin opens in a Safari view for now.** The app's web view can't use passkeys scoped to the tailnet domain (see above), and Safari can. Phase 3 brings it back into the app.
 
 ### 3. Step-up passkeys
 
-- The handoff chosen by spikes b–d.
-- If it's a ticket exchange: a Home Base (and possibly sovereignAuth) endpoint that issues and redeems a one-time ticket, plus the app side.
+The handoff: the web view asks the app to run a passkey ceremony in an ephemeral sign-in sheet, and the app proves it's the household's genuine app with App Attest. The design is sovereignAuth's `docs/native-handoff.md`, built in six slices; this repo's part is the last.
+
+**Spike results (2026-11-18, iOS 26.7, TestFlight):**
+
+| | Result |
+|---|---|
+| 1 · App Attest | **Works in production.** A Node prototype of the server checks passed all 22 (Apple chain, nonce, key ID, App ID hash, production environment, receipt, three assertions with rising counters), and the controls failed as they should. |
+| 2 · Ephemeral sheet | **Works** with 1Password and a YubiKey over USB-C. Not yet recorded: iCloud Keychain, YubiKey over NFC, and whether the sign-in alert is skipped. |
+| 3 · Sheet identity | **Same member** in the sheet as in a native request. |
+| 4 · Sheet closing | Folded into Home Base slice 4: the sheet page navigates to the callback and always shows a return button too. |
+| 5 · Pinning | **Holds.** Refusing every anchor blocked both the native request and the web view's load. The ISRG anchors passed on *leaf ← YE2 ← Root YE ← ISRG Root X2*. The pinned web view's own load wasn't captured. |
+
+The pin set needs Root YE and Root YR once Apple trusts them, before Let's Encrypt drops the X2 cross-sign.
 
 ### 4. Enrollment without passing codes
 
