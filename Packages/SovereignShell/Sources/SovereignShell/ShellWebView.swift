@@ -35,14 +35,18 @@ public struct ShellWebView: UIViewRepresentable {
 
     public func makeCoordinator() -> Coordinator { Coordinator(householdHosts: householdHosts, homeBase: homeBase, trust: trust, handoff: handoff) }
 
-    /// `window.sovereign` for household pages: defined only in the main frame, only on an https household
-    /// host, and fixed so a page can't replace it. The app checks the same again for every call.
-    static func bridgeScript(hosts: Set<String>) -> String {
-        let list = (try? JSONSerialization.data(withJSONObject: hosts.sorted())).flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
+    /// `window.sovereign` for household pages: defined only in the main frame, only on https under the
+    /// household's trust scope (Home Base's host and the tailnet's domain, from its address, so a household
+    /// app reached after this view opened gets it too), and fixed so a page can't replace it. The app checks
+    /// every call again against the household hosts it knows then.
+    static func bridgeScript(homeBase: HomeBaseAddress) -> String {
+        let scope = [homeBase.host, homeBase.trustDomain]
+        let list = (try? JSONSerialization.data(withJSONObject: scope)).flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
         return """
         (() => {
-          const hosts = \(list);
-          if (location.protocol !== 'https:' || !hosts.includes(location.hostname)) return;
+          const [home, domain] = \(list);
+          const host = location.hostname;
+          if (location.protocol !== 'https:' || !(host === home || host === domain || host.endsWith('.' + domain))) return;
           const post = (id) => window.webkit.messageHandlers.sovereign.postMessage({ id: String(id) }).then(() => undefined);
           Object.defineProperty(window, 'sovereign', { value: Object.freeze({ version: 1, handoff: post }), writable: false, configurable: false });
         })();
@@ -54,7 +58,7 @@ public struct ShellWebView: UIViewRepresentable {
         configuration.websiteDataStore = .default()
         if handoff != nil {
             let controller = configuration.userContentController
-            controller.addUserScript(WKUserScript(source: Self.bridgeScript(hosts: householdHosts), injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page))
+            controller.addUserScript(WKUserScript(source: Self.bridgeScript(homeBase: homeBase), injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page))
             controller.addScriptMessageHandler(context.coordinator, contentWorld: .page, name: "sovereign")
         }
         let webView = WKWebView(frame: .zero, configuration: configuration)
