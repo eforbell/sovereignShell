@@ -172,6 +172,17 @@ public struct ShellWebView: UIViewRepresentable {
             }
         }
 
+        /// The camera (getUserMedia), for a household page that asks: an https household host the trust
+        /// covers, on its default port. iOS still asks the member once for the app's own camera permission.
+        /// Anything else is refused. The microphone isn't declared, so pages can't ask for it.
+        public func webView(_ webView: WKWebView, decideMediaCapturePermissionsFor origin: WKSecurityOrigin,
+                            initiatedBy frame: WKFrameInfo, type: WKMediaCaptureType) async -> WKPermissionDecision {
+            let host = origin.host.lowercased()
+            guard type == .camera, origin.protocol == "https", origin.port == 0 || origin.port == 443,
+                  householdHosts.contains(host), pinned(host) else { return .deny }
+            return .grant
+        }
+
         /// `target=_blank` and `window.open`: household pages load here, everything else goes out.
         public func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
                             for action: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
