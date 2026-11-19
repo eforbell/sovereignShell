@@ -135,6 +135,16 @@ The pin set needs Root YE and Root YR once Apple trusts them, before Let's Encry
 - **6a, household trust:** household hosts load only over the pinned authorities, for the app's own requests and in the web view. The phase 3 spike screen is gone.
 - **6b, the handoff:** on first use the app registers this installation with an App Attest key. Household pages get `window.sovereign` (version 1) in their main frame. `handoff(id)` attests the id to the page's own host, opens the ephemeral sheet, and resolves when it returns to the app's callback scheme (its bundle ID), or rejects with `cancelled`, `unavailable` or why. Admin opens in the app, and unlocking it goes through the sheet. Registering a passkey stays in Safari, from the menu.
 
+**Verified on a phone (2026-11-19, TestFlight):** unlocking Home Base's Admin and a sensitive app's passkey check both ran through the handoff inside the app: registration on first use, App Attest, the sheet, and the result back in the web view. In homeSource, a check with a YubiKey over USB-C in the sheet worked too. An every-time action (restarting an app from Admin, with the hardware key) went through the sheet and ran the job. After changing household to a second Home Base, the app registered there on its own; a step-up in that household's Bitcoin Accounting, Admin unlock and an app backup all worked.
+
+Not yet tried on the phone: iCloud Keychain and YubiKey over NFC in the sheet.
+
+Found on the phone, fixed in Home Base: the sheet showed an every-time action's raw target instead of what it does (Home Base #71), and Admin took 6–10 seconds to paint in the app's web view because Home Base read its state before serving each static file.
+
+Still to do:
+- Add Root YE and Root YR to the pinned set once Apple trusts them.
+- Enroll passkeys from the app (phase 4); until then, registering one stays in Safari.
+
 ### 4. Enrollment without passing codes
 
 - The administrator issues a passkey grant on the Members card, as today.
@@ -147,7 +157,7 @@ The pin set needs Root YE and Root YR once Apple trusts them, before Let's Encry
 - Push for approval prompts, using the Home Base app's own topic on the household's push gateway.
 - Widgets.
 - Per-app targets for other suite apps.
-- The `window.sovereign` bridge, when a web app first needs it.
+- A switcher of recently used households, for operators who run more than one Home Base. Today "Change household" forgets the address, and switching back means typing it again.
 
 ## What stays manual
 
