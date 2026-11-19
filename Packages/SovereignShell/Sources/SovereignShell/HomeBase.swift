@@ -126,7 +126,7 @@ public enum HomeBaseError: Error, Equatable, Sendable {
 /// identifies the member exactly as it does for Safari; there's no app-side credential.
 public struct HomeBaseClient: Sendable {
     public let address: HomeBaseAddress
-    private let session: URLSession
+    let session: URLSession
     private let trustDelegate: HouseholdTrustDelegate?
 
     /// Home Base's hostname is strict (sovereignAuth wire contract §4.1): it refuses any request without

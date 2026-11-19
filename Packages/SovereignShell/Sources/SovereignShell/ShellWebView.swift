@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+import AuthenticationServices
 import SwiftUI
 import UIKit
 import WebKit
@@ -14,22 +15,48 @@ public struct ShellWebView: UIViewRepresentable {
     public let householdHosts: Set<String>
     public let homeBase: HomeBaseAddress
     public let trust: HouseholdTrust
+    /// The native handoff (`window.sovereign`, version 1) for household pages: called with the id a page's
+    /// main frame asked for and the page's host. Without it, pages get no bridge.
+    public let handoff: Handoff?
     /// Called once with the underlying web view, for callers that need to evaluate script or observe it.
     public var onCreate: @MainActor (WKWebView) -> Void
 
-    public init(url: URL, householdHosts: Set<String>, homeBase: HomeBaseAddress, trust: HouseholdTrust, onCreate: @escaping @MainActor (WKWebView) -> Void = { _ in }) {
+    public typealias Handoff = @MainActor (_ id: String, _ host: String) async throws(HandoffError) -> Void
+
+    public init(url: URL, householdHosts: Set<String>, homeBase: HomeBaseAddress, trust: HouseholdTrust, handoff: Handoff? = nil,
+                onCreate: @escaping @MainActor (WKWebView) -> Void = { _ in }) {
         self.url = url
         self.householdHosts = Set(householdHosts.map { $0.lowercased() })
         self.homeBase = homeBase
         self.trust = trust
+        self.handoff = handoff
         self.onCreate = onCreate
     }
 
-    public func makeCoordinator() -> Coordinator { Coordinator(householdHosts: householdHosts, homeBase: homeBase, trust: trust) }
+    public func makeCoordinator() -> Coordinator { Coordinator(householdHosts: householdHosts, homeBase: homeBase, trust: trust, handoff: handoff) }
+
+    /// `window.sovereign` for household pages: defined only in the main frame, only on an https household
+    /// host, and fixed so a page can't replace it. The app checks the same again for every call.
+    static func bridgeScript(hosts: Set<String>) -> String {
+        let list = (try? JSONSerialization.data(withJSONObject: hosts.sorted())).flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
+        return """
+        (() => {
+          const hosts = \(list);
+          if (location.protocol !== 'https:' || !hosts.includes(location.hostname)) return;
+          const post = (id) => window.webkit.messageHandlers.sovereign.postMessage({ id: String(id) }).then(() => undefined);
+          Object.defineProperty(window, 'sovereign', { value: Object.freeze({ version: 1, handoff: post }), writable: false, configurable: false });
+        })();
+        """
+    }
 
     public func makeUIView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .default()
+        if handoff != nil {
+            let controller = configuration.userContentController
+            controller.addUserScript(WKUserScript(source: Self.bridgeScript(hosts: householdHosts), injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page))
+            controller.addScriptMessageHandler(context.coordinator, contentWorld: .page, name: "sovereign")
+        }
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
@@ -49,21 +76,41 @@ public struct ShellWebView: UIViewRepresentable {
     }
 
     @MainActor
-    public final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
+    public final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandlerWithReply {
         var householdHosts: Set<String>
         /// Every household host this view was given; only ever added to.
         var pinnedHosts: Set<String>
         let homeBase: HomeBaseAddress
         let trust: HouseholdTrust
+        let handoff: Handoff?
         weak var webView: WKWebView?
         /// Household hosts whose certificate was refused on their latest challenge, so a failed load can say why.
         private var refused: Set<String> = []
 
-        init(householdHosts: Set<String>, homeBase: HomeBaseAddress, trust: HouseholdTrust) {
+        init(householdHosts: Set<String>, homeBase: HomeBaseAddress, trust: HouseholdTrust, handoff: Handoff?) {
             self.householdHosts = householdHosts
             self.pinnedHosts = householdHosts
             self.homeBase = homeBase
             self.trust = trust
+            self.handoff = handoff
+        }
+
+        /// `window.sovereign.handoff(id)`. Only from this web view's main frame, on an https household host
+        /// (whose load passed household trust): anything else is refused before the app attests anything.
+        /// The reply is nothing on success, or the rejection's message (`cancelled`, `unavailable`, or why).
+        public func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) async -> (Any?, String?) {
+            let origin = message.frameInfo.securityOrigin
+            let host = origin.host.lowercased()
+            guard let handoff, message.webView === webView, message.frameInfo.isMainFrame,
+                  origin.protocol == "https", origin.port == 0 || origin.port == 443, householdHosts.contains(host), pinned(host),
+                  let id = (message.body as? [String: Any])?["id"] as? String
+            else { return (nil, "This page can't ask the app to confirm anything.") }
+            do throws(HandoffError) {
+                try await handoff(id, host)
+                return (nil, nil)
+            } catch {
+                return (nil, error.message)
+            }
         }
 
         func pinned(_ host: String) -> Bool { homeBase.trustCovers(host) || pinnedHosts.contains(host) }
@@ -131,6 +178,50 @@ public struct ShellWebView: UIViewRepresentable {
             case .block: break
             }
             return nil
+        }
+    }
+}
+
+/// The handoff's Safari sheet: an ephemeral ASWebAuthenticationSession (no cookies needed, and no "wants to
+/// use … to sign in" alert), closed when the page reaches the app's callback scheme.
+@MainActor
+public final class HandoffSheetPresenter: NSObject, ASWebAuthenticationPresentationContextProviding {
+    private var session: ASWebAuthenticationSession?
+
+    public override init() {}
+
+    public func present(_ url: URL, callbackScheme: String) async throws(HandoffError) {
+        let result: Result<Void, HandoffError> = await withCheckedContinuation { continuation in
+            // Resumed once: a session that fails to start may also call its completion handler.
+            var resumed = false
+            let finish: @MainActor (Result<Void, HandoffError>) -> Void = { outcome in
+                guard !resumed else { return }
+                resumed = true
+                continuation.resume(returning: outcome)
+            }
+            let session = ASWebAuthenticationSession(url: url, callback: .customScheme(callbackScheme)) { _, error in
+                let outcome: Result<Void, HandoffError>
+                if let error {
+                    let cancelled = (error as? ASWebAuthenticationSessionError)?.code == .canceledLogin
+                    outcome = .failure(cancelled ? .cancelled : .failed("The confirmation sheet closed: \(error.localizedDescription)"))
+                } else {
+                    outcome = .success(())
+                }
+                Task { @MainActor in finish(outcome) }
+            }
+            session.prefersEphemeralWebBrowserSession = true
+            session.presentationContextProvider = self
+            self.session = session
+            if !session.start() { finish(.failure(.failed("The confirmation sheet couldn't open."))) }
+        }
+        session = nil
+        try result.get()
+    }
+
+    public nonisolated func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        MainActor.assumeIsolated {
+            let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+            return scenes.flatMap(\.windows).first(where: \.isKeyWindow) ?? ASPresentationAnchor()
         }
     }
 }

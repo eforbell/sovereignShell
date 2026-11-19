@@ -8,6 +8,8 @@ struct HomeView: View {
     let changeHousehold: () -> Void
 
     @State private var model: HomeModel
+    /// Passkey checks for household pages in the app's web view (the native handoff).
+    @State private var agent: HandoffAgent
     @State private var page: BrowserPage?
     @State private var safariPage: BrowserPage?
     @State private var confirmChange = false
@@ -16,7 +18,18 @@ struct HomeView: View {
     init(address: HomeBaseAddress, changeHousehold: @escaping () -> Void) {
         self.address = address
         self.changeHousehold = changeHousehold
-        _model = State(initialValue: HomeModel(client: HomeBaseClient(address: address, trust: householdTrust)))
+        let client = HomeBaseClient(address: address, trust: householdTrust)
+        _model = State(initialValue: HomeModel(client: client))
+        let presenter = HandoffSheetPresenter()
+        _agent = State(initialValue: HandoffAgent(
+            homeBase: address,
+            // The sheet returns to this app's bundle ID: Home Base's HOME_BASE_NATIVE_APP_SCHEME.
+            callbackScheme: Bundle.main.bundleIdentifier ?? "",
+            label: UIDevice.current.name,
+            attest: SystemAppAttest(),
+            transport: { host, path, body throws(HomeBaseError) in try await client.authPost(host: host, path: path, body: body) },
+            sheet: { url, scheme throws(HandoffError) in try await presenter.present(url, callbackScheme: scheme) }
+        ))
     }
 
     var body: some View {
@@ -37,7 +50,9 @@ struct HomeView: View {
             if phase == .active { Task { await model.refresh() } }
         }
         .fullScreenCover(item: $page) { page in
-            AppBrowser(page: page, householdHosts: model.householdHosts(homeBase: address), homeBase: address)
+            AppBrowser(page: page, householdHosts: model.householdHosts(homeBase: address), homeBase: address) { id, host throws(HandoffError) in
+                try await agent.handoff(id: id, host: host)
+            }
         }
         .sheet(item: $safariPage) { page in SafariView(url: page.url).ignoresSafeArea() }
         .confirmationDialog("Change household?", isPresented: $confirmChange, titleVisibility: .visible) {
@@ -204,9 +219,11 @@ struct HomeView: View {
         .disabled(model.isRefreshing)
     }
 
+    /// Admin opens in the app: unlocking it is a check, which the app's sheet runs. Registering a passkey
+    /// stays in a browser, from the menu.
     private var adminButton: some View {
         Button("Open Admin", systemImage: "key") {
-            safariPage = BrowserPage(title: "Admin", url: address.resolving("admin"), kind: .safari)
+            page = BrowserPage(title: "Admin", url: address.resolving("admin"), kind: .inApp)
         }
         .buttonStyle(.bordered)
     }
@@ -222,6 +239,10 @@ struct HomeView: View {
         Menu {
             Button("Open Home Base on the web", systemImage: "globe") {
                 page = BrowserPage(title: "Home Base", url: address.url, kind: .inApp)
+            }
+            // Registering a passkey, and activation, run in a browser: the app's web view can't create one.
+            Button("Open Admin in Safari", systemImage: "safari") {
+                safariPage = BrowserPage(title: "Admin", url: address.resolving("admin"), kind: .safari)
             }
             Divider()
             Button("Change household…", systemImage: "arrow.left.arrow.right") { confirmChange = true }

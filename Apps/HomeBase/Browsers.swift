@@ -16,11 +16,13 @@ struct AppBrowser: View {
     let page: BrowserPage
     let householdHosts: Set<String>
     let homeBase: HomeBaseAddress
+    /// Passkey checks household pages ask for (`window.sovereign.handoff`).
+    let handoff: ShellWebView.Handoff
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
-            ShellWebView(url: page.url, householdHosts: householdHosts, homeBase: homeBase, trust: householdTrust)
+            ShellWebView(url: page.url, householdHosts: householdHosts, homeBase: homeBase, trust: householdTrust, handoff: handoff)
                 .ignoresSafeArea(edges: .bottom)
                 .navigationTitle(page.title)
                 .navigationBarTitleDisplayMode(.inline)
@@ -34,8 +36,8 @@ struct AppBrowser: View {
     }
 }
 
-/// Safari's own view. Used for administration until phase 3 settles how passkeys reach the app: an app's
-/// web view can't use passkeys scoped to the tailnet domain (docs/plan.md), and Safari can.
+/// Safari's own view, for what the app's web view can't do: registering a passkey, which is scoped to the
+/// tailnet domain (docs/plan.md). Checks go through the handoff's sheet instead.
 struct SafariView: UIViewControllerRepresentable {
     let url: URL
     func makeUIViewController(context: Context) -> SFSafariViewController { SFSafariViewController(url: url) }
