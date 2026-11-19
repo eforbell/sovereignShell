@@ -151,6 +151,10 @@ Still to do:
 - The member's app picks it up over the tailnet, for its own member only, so no code is passed by hand.
 - The grant is still consumed when the registration verifies, never when the app fetches it.
 
+**Browser features in the shell.** A household page shouldn't need to know whether it runs in Safari or in the app. Where the app's web view lacks something Safari has, the shell supplies it:
+- **The camera:** found missing with homeSource's document scan. It needs the app to declare camera use, then it's granted to household pages only.
+- **Not declared yet:** the microphone and location. Add them the same way when an app needs them.
+
 ### Later
 
 - The phone as an approval key: the App Attest–backed "attested device" from the iPhone hardware-key research.
