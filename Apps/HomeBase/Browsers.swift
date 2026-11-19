@@ -15,11 +15,12 @@ struct BrowserPage: Identifiable {
 struct AppBrowser: View {
     let page: BrowserPage
     let householdHosts: Set<String>
+    let homeBase: HomeBaseAddress
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
-            ShellWebView(url: page.url, householdHosts: householdHosts)
+            ShellWebView(url: page.url, householdHosts: householdHosts, homeBase: homeBase, trust: householdTrust)
                 .ignoresSafeArea(edges: .bottom)
                 .navigationTitle(page.title)
                 .navigationBarTitleDisplayMode(.inline)

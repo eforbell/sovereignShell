@@ -25,6 +25,21 @@ public struct HomeBaseAddress: Hashable, Codable, Sendable {
 
     public var host: String { url.host() ?? "" }
 
+    /// The domain household trust covers: Home Base's host without its first label (the tailnet's domain,
+    /// as `smith-homebase.example-tailnet.ts.net` gives `example-tailnet.ts.net`), where every household
+    /// service has its hostname. Taken from the address alone, so it never depends on what Home Base answers.
+    public var trustDomain: String {
+        let labels = host.split(separator: ".")
+        return labels.count >= 3 ? labels.dropFirst().joined(separator: ".") : host
+    }
+
+    /// Whether `host` is held to household trust: Home Base's own host, or any host under `trustDomain`.
+    public func trustCovers(_ host: String) -> Bool {
+        let host = host.lowercased()
+        let domain = trustDomain
+        return host == self.host || host == domain || host.hasSuffix("." + domain)
+    }
+
     /// A path under Home Base, e.g. `api/home` or `admin`.
     public func resolving(_ path: String) -> URL {
         url.appending(path: path)
@@ -101,6 +116,8 @@ public struct HouseholdHome: Decodable, Equatable, Sendable {
 public enum HomeBaseError: Error, Equatable, Sendable {
     /// No answer at all: often the phone isn't on the tailnet, or the address is wrong.
     case unreachable(String)
+    /// The household host's certificate doesn't chain to the pinned authorities (HouseholdTrust).
+    case untrusted
     case http(Int)
     case unreadable
 }
@@ -110,6 +127,7 @@ public enum HomeBaseError: Error, Equatable, Sendable {
 public struct HomeBaseClient: Sendable {
     public let address: HomeBaseAddress
     private let session: URLSession
+    private let trustDelegate: HouseholdTrustDelegate?
 
     /// Home Base's hostname is strict (sovereignAuth wire contract §4.1): it refuses any request without
     /// fetch metadata, which browsers send and URLSession doesn't. This app is Home Base's own client, so it
@@ -121,9 +139,25 @@ public struct HomeBaseClient: Sendable {
         "Sec-Fetch-Dest": "empty",
     ]
 
+    /// A client whose requests trust only the household's pinned authorities (the app's).
+    public init(address: HomeBaseAddress, trust: HouseholdTrust) {
+        let delegate = HouseholdTrustDelegate(trust: trust)
+        self.address = address
+        self.trustDelegate = delegate
+        self.session = URLSession(configuration: .ephemeral, delegate: delegate, delegateQueue: nil)
+    }
+
+    /// A client on a session of the caller's (tests).
     public init(address: HomeBaseAddress, session: URLSession = .shared) {
         self.address = address
         self.session = session
+        self.trustDelegate = nil
+    }
+
+    /// The error for a request that got no answer: untrusted when the household trust refused its host.
+    func failure(_ error: any Error, host: String) -> HomeBaseError {
+        if let trustDelegate, trustDelegate.refused(host) { return .untrusted }
+        return .unreachable(error.localizedDescription)
     }
 
     public func home() async throws(HomeBaseError) -> HouseholdHome {
@@ -137,7 +171,7 @@ public struct HomeBaseClient: Sendable {
         do {
             (data, response) = try await session.data(for: request)
         } catch {
-            throw .unreachable(error.localizedDescription)
+            throw failure(error, host: address.host)
         }
         guard let http = response as? HTTPURLResponse else { throw .unreadable }
         guard http.statusCode == 200 else { throw .http(http.statusCode) }
