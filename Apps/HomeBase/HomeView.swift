@@ -164,9 +164,16 @@ struct HomeView: View {
                 Text("Connected as **\(caller.name ?? caller.login)**")
                     .foregroundStyle(.secondary)
             }
-            if let invite = home.passkeyInvite {
+            // Only while the invitation lasts: at its end the launcher asks Home Base again, and the card goes.
+            if let invite = home.passkeyInvite, invite.expiresAt.map({ $0 > .now }) ?? true {
                 AddPasskeyCard(address: address, invite: invite) { url in
                     page = BrowserPage(title: "Passkeys", url: url, kind: .inApp)
+                }
+                .task(id: invite.expiresAt) {
+                    guard let end = invite.expiresAt else { return }
+                    try? await Task.sleep(for: .seconds(max(0, end.timeIntervalSinceNow) + 1))
+                    guard !Task.isCancelled else { return }
+                    await model.refresh()
                 }
             }
             if home.apps.isEmpty {

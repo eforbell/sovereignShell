@@ -161,7 +161,7 @@ Setup, recovery and activation stay in Safari, because they rest on the passphra
 
 The grant is still used up only when the registration verifies.
 
-**Built (2026-11-19):** sovereignAuth #14 and #15, Home Base #73–#75, and this repo's launcher card and scanner.
+**Built (2026-11-19), not yet checked on a phone:** sovereignAuth #14 and #15, Home Base #73–#75, and this repo's launcher card and scanner.
 
 **To check on a phone:** creating a passkey in the ephemeral sheet with iCloud Keychain, 1Password and a YubiKey (with attestation). Phase 3 measured only checks there. Where a provider can't create one in the sheet, Safari still works.
 

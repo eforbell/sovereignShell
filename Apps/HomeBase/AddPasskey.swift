@@ -1,3 +1,4 @@
+import AVFoundation
 import SovereignShell
 import SwiftUI
 import VisionKit
@@ -14,7 +15,11 @@ struct AddPasskeyCard: View {
     let open: (URL) -> Void
 
     @State private var scanning = false
+    /// What a scan found, opened once the scanner has gone: one presentation at a time.
+    @State private var scanned: URL?
     @State private var problem: String?
+    @State private var cameraDenied = false
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -27,19 +32,25 @@ struct AddPasskeyCard: View {
                     .foregroundStyle(.secondary)
             }
             HStack(spacing: 12) {
-                Button("Scan code", systemImage: "qrcode.viewfinder") { scanning = true }
+                Button("Scan code", systemImage: "qrcode.viewfinder") { Task { await scan() } }
                     .buttonStyle(.borderedProminent)
-                    .disabled(!CodeScanner.isAvailable)
+                    .disabled(!DataScannerViewController.isSupported)
                 PasteButton(payloadType: String.self) { strings in
                     guard let text = strings.first else { return }
-                    Task { @MainActor in use(text) }
+                    Task { @MainActor in pasted(text) }
                 }
                 .labelStyle(.titleAndIcon)
             }
-            if !CodeScanner.isAvailable {
-                Text("Scanning needs the camera, which isn't available here. Paste the code instead.")
+            if !DataScannerViewController.isSupported {
+                Text("This phone can't scan codes. Paste the code instead.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+            }
+            if cameraDenied {
+                Button("Allow the camera in Settings") {
+                    if let settings = URL(string: UIApplication.openSettingsURLString) { openURL(settings) }
+                }
+                .font(.footnote)
             }
             if let problem {
                 Text(problem)
@@ -50,11 +61,16 @@ struct AddPasskeyCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(20)
         .background(.background.secondary, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .sheet(isPresented: $scanning) {
+        .sheet(isPresented: $scanning, onDismiss: {
+            if let url = scanned {
+                scanned = nil
+                open(url)
+            }
+        }) {
             NavigationStack {
-                CodeScanner { text in
+                CodeScanner(accept: accept) { failure in
                     scanning = false
-                    use(text)
+                    problem = failure
                 }
                 .ignoresSafeArea()
                 .navigationTitle("Scan the code")
@@ -68,27 +84,70 @@ struct AddPasskeyCard: View {
         }
     }
 
-    private func use(_ text: String) {
-        switch EnrollmentCode.parse(text, for: address) {
+    /// The camera, asked for the first time if need be; then the scanner.
+    private func scan() async {
+        problem = nil
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            cameraDenied = false
+        case .notDetermined:
+            guard await AVCaptureDevice.requestAccess(for: .video) else { return deny() }
+            cameraDenied = false
+        default:
+            return deny()
+        }
+        guard DataScannerViewController.isAvailable else {
+            problem = "The camera isn't available right now. Paste the code instead."
+            return
+        }
+        scanning = true
+    }
+
+    private func deny() {
+        cameraDenied = true
+        problem = "Home Base can't use the camera. Allow it in Settings, or paste the code."
+    }
+
+    /// A QR code the scanner read: true if it's done (this household's code, or another household's, which
+    /// is worth saying). Other codes in view are ignored and scanning goes on.
+    private func accept(_ text: String) -> Bool {
+        switch EnrollmentCode.parse(text, from: .scanned, for: address) {
+        case .success(let code):
+            problem = nil
+            scanned = address.addPasskey(code: code)
+            scanning = false
+            return true
+        case .failure(.otherHousehold(let host)):
+            problem = Self.otherHousehold(host, address: address)
+            scanning = false
+            return true
+        case .failure(.unreadable):
+            return false
+        }
+    }
+
+    private func pasted(_ text: String) {
+        switch EnrollmentCode.parse(text, from: .pasted, for: address) {
         case .success(let code):
             problem = nil
             open(address.addPasskey(code: code))
         case .failure(.otherHousehold(let host)):
-            problem = "That code is for another household (\(host)), not \(address.host)."
+            problem = Self.otherHousehold(host, address: address)
         case .failure(.unreadable):
             problem = "That isn't an enrollment code. Ask your administrator to show it again on the Members card."
         }
     }
+
+    private static func otherHousehold(_ host: String?, address: HomeBaseAddress) -> String {
+        "That code is for another household\(host.map { " (\($0))" } ?? ""), not \(address.host)."
+    }
 }
 
-/// The camera, reading QR codes until one is found. VisionKit's scanner asks for the camera itself
-/// (NSCameraUsageDescription).
+/// The camera, reading QR codes until `accept` takes one. Scanning starts once the scanner is on screen;
+/// if it can't, `failed` says why.
 struct CodeScanner: UIViewControllerRepresentable {
-    let found: (String) -> Void
-
-    @MainActor static var isAvailable: Bool {
-        DataScannerViewController.isSupported && DataScannerViewController.isAvailable
-    }
+    let accept: (String) -> Bool
+    let failed: (String) -> Void
 
     func makeUIViewController(context: Context) -> DataScannerViewController {
         let scanner = DataScannerViewController(
@@ -99,30 +158,41 @@ struct CodeScanner: UIViewControllerRepresentable {
             isHighlightingEnabled: true
         )
         scanner.delegate = context.coordinator
-        try? scanner.startScanning()
         return scanner
     }
 
-    func updateUIViewController(_ scanner: DataScannerViewController, context: Context) {}
+    func updateUIViewController(_ scanner: DataScannerViewController, context: Context) {
+        guard !context.coordinator.started else { return }
+        context.coordinator.started = true
+        // After this update, when the sheet has put the scanner on screen.
+        Task { @MainActor in
+            do {
+                try scanner.startScanning()
+            } catch {
+                failed("The camera couldn't start (\(error.localizedDescription)). Paste the code instead.")
+            }
+        }
+    }
 
     static func dismantleUIViewController(_ scanner: DataScannerViewController, coordinator: Coordinator) {
+        coordinator.done = true
         scanner.stopScanning()
     }
 
-    func makeCoordinator() -> Coordinator { Coordinator(found: found) }
+    func makeCoordinator() -> Coordinator { Coordinator(accept: accept) }
 
     @MainActor final class Coordinator: NSObject, DataScannerViewControllerDelegate {
-        let found: (String) -> Void
-        private var done = false
-        init(found: @escaping (String) -> Void) { self.found = found }
+        let accept: (String) -> Bool
+        var started = false
+        var done = false
+        init(accept: @escaping (String) -> Bool) { self.accept = accept }
 
         func dataScanner(_ scanner: DataScannerViewController, didAdd items: [RecognizedItem], allItems: [RecognizedItem]) {
             guard !done else { return }
             for item in items {
-                if case .barcode(let barcode) = item, let text = barcode.payloadStringValue {
+                if case .barcode(let barcode) = item, let text = barcode.payloadStringValue, accept(text) {
                     done = true
                     scanner.stopScanning()
-                    found(text)
                     return
                 }
             }

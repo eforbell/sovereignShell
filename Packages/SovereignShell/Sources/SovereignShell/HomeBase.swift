@@ -63,8 +63,8 @@ public struct EnrollmentCode: Equatable, Sendable {
     public let value: String
 
     public enum Problem: Error, Equatable, Sendable {
-        /// A code for another household's Home Base, named by its hostname.
-        case otherHousehold(String)
+        /// A code for another household's Home Base, named by its hostname when it looks like one.
+        case otherHousehold(String?)
         /// Not an enrollment code.
         case unreadable
     }
@@ -74,22 +74,33 @@ public struct EnrollmentCode: Equatable, Sendable {
         (8...64).contains(text.count) && text.unicodeScalars.allSatisfy { $0.isASCII && (CharacterSet.alphanumerics.contains($0) || $0 == "-" || $0 == "_") }
     }
 
+    /// Where the text came from. A scanned QR code must be the Members card's, naming its household; a pasted
+    /// one may also be the code alone (the administrator sent just that).
+    public enum Source: Sendable { case scanned, pasted }
+
     /// The code in `text`, for the household at `address`.
-    public static func parse(_ text: String, for address: HomeBaseAddress) -> Result<EnrollmentCode, Problem> {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let lines = trimmed.split(separator: "\n", omittingEmptySubsequences: false).map { $0.trimmingCharacters(in: .whitespaces) }
+    public static func parse(_ text: String, from source: Source, for address: HomeBaseAddress) -> Result<EnrollmentCode, Problem> {
+        // Any line ending ("\r\n" is one Character in Swift, and a newline).
+        let lines = text.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
         let code: String
         if lines.count == 3, lines[0] == "sovereign-grant/1" {
-            let host = lines[1].lowercased()
-            guard host == address.host else { return .failure(.otherHousehold(host)) }
+            var host = lines[1].lowercased()
+            if host.hasSuffix(".") { host.removeLast() }
+            guard host == address.host else { return .failure(.otherHousehold(isHostname(host) ? host : nil)) }
             code = lines[2]
-        } else if lines.count == 1 {
+        } else if lines.count == 1, source == .pasted {
             code = lines[0]
         } else {
             return .failure(.unreadable)
         }
         guard isCode(code) else { return .failure(.unreadable) }
         return .success(EnrollmentCode(value: code))
+    }
+
+    /// Whether text read from a code is fit to show as a hostname: DNS characters, a sensible length.
+    static func isHostname(_ text: String) -> Bool {
+        (1...253).contains(text.count) && text.contains(".")
+            && text.unicodeScalars.allSatisfy { $0.isASCII && (CharacterSet.alphanumerics.contains($0) || $0 == "-" || $0 == ".") }
     }
 }
 
@@ -142,7 +153,14 @@ public struct HouseholdHome: Decodable, Equatable, Sendable {
     public let passkeyInvite: PasskeyInvite?
 
     private enum Keys: String, CodingKey { case state, caller, canUnlockAdmin, candidateObserved, apps, passkeyInvite }
-    private struct RawInvite: Decodable { let expiresAt: String? }
+    /// Loose: an expiry that doesn't read leaves the invitation, without one.
+    private struct RawInvite: Decodable {
+        let expiresAt: String?
+        private enum Keys: String, CodingKey { case expiresAt }
+        init(from decoder: Decoder) throws {
+            expiresAt = try? decoder.container(keyedBy: Keys.self).decodeIfPresent(String.self, forKey: .expiresAt)
+        }
+    }
 
     /// Loose on purpose: a field Home Base adds later never breaks an installed app, and one bad app entry
     /// drops that entry rather than the whole launcher. Only http(s) app links are kept.

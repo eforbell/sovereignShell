@@ -112,38 +112,54 @@ import Testing
 
 @Suite struct PasskeyInviteTests {
     private let address = HomeBaseAddress("smith-homebase.example-tailnet.ts.net")!
+    private let code = "oIyLcsPf5vbG94TsrgvH4g"
+    private func home(_ invite: String) throws -> HouseholdHome {
+        try JSONDecoder().decode(HouseholdHome.self, from: Data(#"{"state":"member","caller":{"login":"kid@example.com"},"canUnlockAdmin":false,"apps":[]\#(invite)}"#.utf8))
+    }
 
     @Test func decodesTheInviteAndItsExpiry() throws {
-        let home = try JSONDecoder().decode(HouseholdHome.self, from: Data(#"{"state":"member","caller":{"login":"kid@example.com"},"canUnlockAdmin":false,"apps":[],"passkeyInvite":{"expiresAt":"2026-11-19T20:36:00.000Z"}}"#.utf8))
-        #expect(home.passkeyInvite?.expiresAt == Date(timeIntervalSince1970: 1_795_120_560))
-        let none = try JSONDecoder().decode(HouseholdHome.self, from: Data(#"{"state":"member","apps":[]}"#.utf8))
-        #expect(none.passkeyInvite == nil)
-        let odd = try JSONDecoder().decode(HouseholdHome.self, from: Data(#"{"state":"member","apps":[],"passkeyInvite":{"expiresAt":42}}"#.utf8))
-        #expect(odd.passkeyInvite == nil, "a field that doesn't read never breaks the launcher")
+        #expect(try home(#","passkeyInvite":{"expiresAt":"2026-11-19T20:36:00.000Z"}"#).passkeyInvite?.expiresAt == Date(timeIntervalSince1970: 1_795_120_560))
+        #expect(try home(#","passkeyInvite":{"expiresAt":"2026-11-19T20:36:00Z"}"#).passkeyInvite?.expiresAt == Date(timeIntervalSince1970: 1_795_120_560))
+        #expect(try home("").passkeyInvite == nil)
+        #expect(try home(#","passkeyInvite":null"#).passkeyInvite == nil)
+        // An expiry that doesn't read never hides the invitation, and never breaks the launcher.
+        for odd in [#","passkeyInvite":{}"#, #","passkeyInvite":{"expiresAt":42}"#, #","passkeyInvite":{"expiresAt":"soon"}"#] {
+            let invite = try home(odd).passkeyInvite
+            #expect(invite != nil && invite?.expiresAt == nil, "\(odd)")
+        }
     }
 
     @Test func scannedCodeForThisHousehold() {
-        let scanned = EnrollmentCode.parse("sovereign-grant/1\nsmith-homebase.example-tailnet.ts.net\noIyLcsPf5vbG94TsrgvH4g", for: address)
-        #expect(scanned == .success(EnrollmentCode(value: "oIyLcsPf5vbG94TsrgvH4g")))
-        #expect(EnrollmentCode.parse("sovereign-grant/1\nSMITH-HOMEBASE.example-tailnet.ts.net\noIyLcsPf5vbG94TsrgvH4g\n", for: address) == scanned)
+        let expected: Result<EnrollmentCode, EnrollmentCode.Problem> = .success(EnrollmentCode(value: code))
+        #expect(EnrollmentCode.parse("sovereign-grant/1\nsmith-homebase.example-tailnet.ts.net\n\(code)", from: .scanned, for: address) == expected)
+        #expect(EnrollmentCode.parse("sovereign-grant/1\r\nSMITH-HOMEBASE.example-tailnet.ts.net.\r\n\(code)\r\n", from: .scanned, for: address) == expected, "CRLF, case, a trailing dot")
+        #expect(EnrollmentCode.parse("sovereign-grant/1\nsmith-homebase.example-tailnet.ts.net\n\(code)", from: .pasted, for: address) == expected, "the whole card text, pasted")
     }
 
     @Test func scannedCodeForAnotherHousehold() {
-        let other = EnrollmentCode.parse("sovereign-grant/1\njones-homebase.example-tailnet.ts.net\noIyLcsPf5vbG94TsrgvH4g", for: address)
-        #expect(other == .failure(.otherHousehold("jones-homebase.example-tailnet.ts.net")))
+        #expect(EnrollmentCode.parse("sovereign-grant/1\njones-homebase.example-tailnet.ts.net\n\(code)", from: .scanned, for: address) == .failure(.otherHousehold("jones-homebase.example-tailnet.ts.net")))
+        #expect(EnrollmentCode.parse("sovereign-grant/1\ncall 555-0100 now!\n\(code)", from: .scanned, for: address) == .failure(.otherHousehold(nil)), "nothing that isn't a hostname is shown")
     }
 
-    @Test func pastedCode() {
-        #expect(EnrollmentCode.parse("  oIyLcsPf5vbG94TsrgvH4g \n", for: address) == .success(EnrollmentCode(value: "oIyLcsPf5vbG94TsrgvH4g")))
+    @Test func pastedCodeAlone() {
+        #expect(EnrollmentCode.parse("  \(code) \n", from: .pasted, for: address) == .success(EnrollmentCode(value: code)))
+        #expect(EnrollmentCode.parse(code, from: .scanned, for: address) == .failure(.unreadable), "a QR code must name its household")
     }
 
-    @Test(arguments: ["", "short", "has spaces in it", "https://example.com/?grant=abc", "sovereign-grant/2\nsmith-homebase.example-tailnet.ts.net\noIyLcsPf5vbG94TsrgvH4g", "sovereign-grant/1\nsmith-homebase.example-tailnet.ts.net\n<script>", "a\nb"])
+    @Test func codeLengths() {
+        #expect(EnrollmentCode.parse(String(repeating: "a", count: 8), from: .pasted, for: address) == .success(EnrollmentCode(value: String(repeating: "a", count: 8))))
+        #expect(EnrollmentCode.parse(String(repeating: "a", count: 64), from: .pasted, for: address) == .success(EnrollmentCode(value: String(repeating: "a", count: 64))))
+        #expect(EnrollmentCode.parse(String(repeating: "a", count: 7), from: .pasted, for: address) == .failure(.unreadable))
+        #expect(EnrollmentCode.parse(String(repeating: "a", count: 65), from: .pasted, for: address) == .failure(.unreadable))
+    }
+
+    @Test(arguments: ["", "short", "has spaces in it", "https://example.com/?grant=abc", "sovereign-grant/2\nsmith-homebase.example-tailnet.ts.net\noIyLcsPf5vbG94TsrgvH4g", "sovereign-grant/1\nsmith-homebase.example-tailnet.ts.net\n<script>", "a\nb", "caf\u{e9}caf\u{e9}caf\u{e9}", "\u{FF41}\u{FF42}\u{FF43}\u{FF44}\u{FF45}\u{FF46}\u{FF47}\u{FF48}", "sovereign-grant/1\n\noIyLcsPf5vbG94TsrgvH4g"])
     func notACode(_ text: String) {
-        #expect(EnrollmentCode.parse(text, for: address) == .failure(.unreadable))
+        #expect(EnrollmentCode.parse(text, from: .pasted, for: address) == .failure(.unreadable))
     }
 
     @Test func opensAdminWithTheCodeInTheFragment() {
-        let url = address.addPasskey(code: EnrollmentCode(value: "oIyLcsPf5vbG94TsrgvH4g"))
+        let url = address.addPasskey(code: EnrollmentCode(value: code))
         #expect(url.absoluteString == "https://smith-homebase.example-tailnet.ts.net/admin#grant=oIyLcsPf5vbG94TsrgvH4g")
     }
 }
