@@ -165,7 +165,9 @@ The grant is still used up only when the registration verifies.
 
 **Verified on a phone (2026-11-20, rehearsal Home Base):** a member with no passkey saw the launcher card, scanned the administrator's code (the camera prompt came first), and the app opened Admin's focused "Add your passkey" page (Home Base #76) with the code filled in. The passkey was created in the sheet with iCloud Keychain and the grant was used up.
 
-**Still to check on a phone:** creating a passkey in the sheet with 1Password and a YubiKey (with attestation), adding a second passkey from the Passkeys panel, and an administrator's passkey. Where a provider can't create one in the sheet, Safari still works.
+Also verified: creating a passkey in the sheet with 1Password; adding more passkeys from the Passkeys panel after a recent check; and an administrator's passkey on a YubiKey with hardware attestation, through the every-time check. Where a provider can't create one in the sheet, Safari still works.
+
+Not yet tried on the phone: YubiKey over NFC in the sheet.
 
 **Browser features in the shell.** A household page shouldn't need to know whether it runs in Safari or in the app. Where the app's web view lacks something Safari has, the shell supplies it:
 - **The camera:** found missing with homeSource's document scan. It needs the app to declare camera use, then it's granted to household pages only.
