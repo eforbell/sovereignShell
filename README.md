@@ -8,7 +8,7 @@ The first app built on it is **Home Base**: a native launcher and onboarding scr
 - `Apps/HomeBase`: the Home Base app target.
 - `docs/plan.md`: what we're building, in what order, and why.
 
-**Status:** in use through TestFlight. Home Base's launcher works, and so do passkey checks inside the app, through the native handoff. So does adding a passkey in the app, a first one by scanning the administrator's code. Setup and recovery happen in Safari. See `docs/plan.md` for what's next.
+**Status:** in use through TestFlight. Home Base's launcher works, and so do passkey checks inside the app, through the native handoff. A member's first passkey can be added in the app by scanning the administrator's code (checked with iCloud Keychain). Setup and recovery happen in Safari. See `docs/plan.md` for what's next.
 
 ## Identity is configuration
 

@@ -156,7 +156,7 @@ Setup, recovery and activation stay in Safari, because they rest on the passphra
 
 **The grant keeps its code.** The first plan was for the member's app to pick up the grant with no code. Review found that a malicious app on the member's phone could relay an attacker's own copy of the genuine app through the phone's tailnet connection, and so use the grant. The code is the step between two people that a relay can't fake. So the code stays, and the typing goes:
 - the Members card shows the code as a QR code too;
-- the launcher shows "Add a passkey" while an invitation lasts (`passkeyInvite` in `/api/home`). It scans the code, or takes it pasted, and opens Admin's Passkeys panel with the code filled in;
+- the launcher shows "Add a passkey" while an invitation lasts (`passkeyInvite` in `/api/home`). It scans the code, or takes it pasted, and opens Admin with the code filled in, showing only a focused "Add your passkey" page (Home Base #76);
 - the code never arrives by a link, which another app could claim.
 
 The grant is still used up only when the registration verifies.
