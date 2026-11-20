@@ -15,6 +15,8 @@ struct HomeView: View {
     @State private var showHouseholds = false
     /// The household picked in Households, switched to once the sheet has gone.
     @State private var chosen: HomeBaseAddress?
+    /// Forget this household, once the Households sheet has gone.
+    @State private var forgetting = false
     @Environment(\.scenePhase) private var scenePhase
 
     init(address: HomeBaseAddress, households: Households) {
@@ -63,12 +65,15 @@ struct HomeView: View {
         }
         .sheet(item: $safariPage) { page in SafariView(url: page.url).ignoresSafeArea() }
         .sheet(isPresented: $showHouseholds, onDismiss: {
-            if let address = chosen {
+            if forgetting {
+                forgetting = false
+                households.forget(address)
+            } else if let address = chosen {
                 chosen = nil
                 households.open(address)
             }
         }) {
-            HouseholdsView(current: address, households: households) { chosen = $0 }
+            HouseholdsView(current: address, households: households, choose: { chosen = $0 }, forgetCurrent: { forgetting = true })
         }
     }
 

@@ -8,7 +8,7 @@ struct Households {
     let open: (HomeBaseAddress) -> Void
     /// Keeps the name a household's Home Base gives it.
     let name: (HomeBaseAddress, String) -> Void
-    /// Forgets a household other than the current one.
+    /// Forgets a household; the current one leaves the home, so the home asks for that after its sheet.
     let forget: (HomeBaseAddress) -> Void
 
     /// The others, most recently used first.
@@ -17,13 +17,16 @@ struct Households {
     }
 }
 
-/// Every household this phone has joined: tap one to switch, swipe one away to forget it, or join another.
-/// Leaving is by `choose`, which the home runs once this sheet has gone.
+/// Every household this phone has joined: tap one to switch, swipe one away to forget it, join another,
+/// or forget the current one. Leaving the current household is by `choose` or `forgetCurrent`, which the
+/// home runs once this sheet has gone.
 struct HouseholdsView: View {
     let current: HomeBaseAddress
     let households: Households
     let choose: (HomeBaseAddress) -> Void
+    let forgetCurrent: () -> Void
     @Environment(\.dismiss) private var dismiss
+    @State private var confirmForget = false
 
     var body: some View {
         NavigationStack {
@@ -55,6 +58,19 @@ struct HouseholdsView: View {
                         Label("Join another household", systemImage: "plus")
                     }
                 }
+                Section {
+                    Button("Forget this household", role: .destructive) { confirmForget = true }
+                }
+            }
+            .confirmationDialog("Forget this household?", isPresented: $confirmForget, titleVisibility: .visible) {
+                Button("Forget \(households.known.entry(for: current)?.title ?? current.shortName)", role: .destructive) {
+                    forgetCurrent()
+                    dismiss()
+                }
+            } message: {
+                Text(households.known.entries.count > 1
+                    ? "This phone forgets \(current.host) and goes to your next household. Your membership doesn't change."
+                    : "This phone forgets \(current.host) and goes back to joining a household. Your membership doesn't change.")
             }
             .navigationTitle("Households")
             .navigationBarTitleDisplayMode(.inline)

@@ -46,9 +46,11 @@ struct RootView: View {
         if named != known { knownText = named.stored }
     }
 
-    /// Any but the current household: switch away from it first.
+    /// The current household too: the phone then goes to the next one, or back to joining when it was the
+    /// last.
     private func forget(_ address: HomeBaseAddress) {
-        guard address != current else { return }
-        knownText = known.forgetting(address).stored
+        let rest = known.forgetting(address)
+        knownText = rest.stored
+        if address == current { addressText = rest.addresses.first?.url.absoluteString ?? "" }
     }
 }
