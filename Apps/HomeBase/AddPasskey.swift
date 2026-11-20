@@ -128,7 +128,7 @@ struct AddPasskeyCard: View {
         case .failure(.unreadable):
             // The Members card's own format, but not a code this app reads: say so rather than scan on.
             guard text.hasPrefix("sovereign-grant/") else { return false }
-            problem = text.hasPrefix("sovereign-grant/1")
+            problem = text.split(whereSeparator: \.isNewline).first.map({ $0.trimmingCharacters(in: .whitespaces) == "sovereign-grant/1" }) ?? false
                 ? "That code didn't read. Ask your administrator to issue a new one, or paste it."
                 : "This code is from a newer Home Base. Update this app to scan it, or paste the code."
             scanning = false
