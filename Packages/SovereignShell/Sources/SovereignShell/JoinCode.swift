@@ -19,13 +19,15 @@ public enum JoinCode {
               let host = parts.host, !host.isEmpty,
               parts.user == nil, parts.password == nil
         else { return nil }
-        let path = parts.path.hasSuffix("/") ? String(parts.path.dropLast()) : parts.path
+        // Encoded, so Home Base's own path comes back as it was (`a%2Fb` stays one segment).
+        let encoded = parts.percentEncodedPath
+        let path = encoded.hasSuffix("/") ? String(encoded.dropLast()) : encoded
         guard path.hasSuffix("/join") else { return nil }
         var base = URLComponents()
         base.scheme = "https"
         base.host = host
         base.port = parts.port
-        base.path = String(path.dropLast("join".count))
+        base.percentEncodedPath = String(path.dropLast("join".count))
         return base.url.flatMap { HomeBaseAddress($0.absoluteString) }
     }
 }

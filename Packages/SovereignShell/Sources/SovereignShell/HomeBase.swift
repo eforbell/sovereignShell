@@ -6,6 +6,8 @@ public struct HomeBaseAddress: Hashable, Codable, Sendable {
 
     /// Accepts `home.example.ts.net`, `https://home.example.ts.net` or the same with a path.
     /// Only https: tailnet hostnames carry real certificates, and App Transport Security expects them.
+    /// One household, one address: the host is lowercased without a trailing dot, the default port is
+    /// dropped, and the path keeps its percent-encoding.
     public init?(_ text: String) {
         var trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.contains("://") { trimmed = "https://" + trimmed }
@@ -14,11 +16,15 @@ public struct HomeBaseAddress: Hashable, Codable, Sendable {
               let host = parts.host, !host.isEmpty,
               parts.user == nil, parts.password == nil
         else { return nil }
+        var name = host.lowercased()
+        if name.hasSuffix(".") { name.removeLast() }
+        guard !name.isEmpty else { return nil }
         parts.scheme = "https"
-        parts.host = host.lowercased()
+        parts.host = name
+        if parts.port == 443 { parts.port = nil }
         parts.query = nil
         parts.fragment = nil
-        if !parts.path.hasSuffix("/") { parts.path += "/" }
+        if !parts.percentEncodedPath.hasSuffix("/") { parts.percentEncodedPath += "/" }
         guard let url = parts.url else { return nil }
         self.url = url
     }

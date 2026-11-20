@@ -39,6 +39,23 @@ import Testing
         #expect(JoinCode.address(from: text) == nil)
     }
 
+    @Test func anEncodedPathComesBackAsItWas() throws {
+        let address = try #require(HomeBaseAddress("https://x.example.ts.net/a%2Fb/"))
+        #expect(address.url.absoluteString == "https://x.example.ts.net/a%2Fb/")
+        let url = JoinCode.url(for: address).absoluteString
+        #expect(url == "https://x.example.ts.net/a%2Fb/join")
+        #expect(JoinCode.address(from: url) == address)
+    }
+
+    @Test func oneHouseholdOneAddress() throws {
+        let plain = try #require(HomeBaseAddress("home.example.ts.net"))
+        #expect(HomeBaseAddress("home.example.ts.net.") == plain, "a trailing dot")
+        #expect(HomeBaseAddress("https://home.example.ts.net:443/") == plain, "the default port")
+        #expect(JoinCode.address(from: "https://home.example.ts.net.:443/join") == plain)
+        #expect(HomeBaseAddress("home.example.ts.net:3080")?.typed == "home.example.ts.net:3080", "another port stays")
+        #expect(HomeBaseAddress(".") == nil)
+    }
+
     @Test func typedDropsTheSchemeAndSlash() throws {
         #expect(try #require(HomeBaseAddress("a.example.ts.net")).typed == "a.example.ts.net")
     }
