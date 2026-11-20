@@ -130,9 +130,19 @@ struct JoinForm: View {
         }
     }
 
-    /// A join code fills in the address (not saved: the person checks it and continues). Other codes in view
-    /// are passed over, and scanning goes on.
+    /// A join code fills in the address (not saved: the person checks it and continues). A passkey code, or a
+    /// join code on plain http, says so; other codes in view are passed over, and scanning goes on.
     private func accept(_ code: String) -> Bool {
+        if code.hasPrefix("sovereign-grant/") {
+            problem = "That's a passkey code. To join, scan the household's join code: Admin → Members → Show the join code."
+            scanning = false
+            return true
+        }
+        if code.lowercased().hasPrefix("http://"), JoinCode.address(from: "https://" + code.dropFirst("http://".count)) != nil {
+            problem = "That join code is for an http address, which the app can't use. Open the join page on Home Base's https address."
+            scanning = false
+            return true
+        }
         guard let address = JoinCode.address(from: code) else { return false }
         scannedText = address.typed
         text = scannedText
