@@ -143,13 +143,27 @@ Found on the phone, fixed in Home Base: the sheet showed an every-time action's 
 
 Still to do:
 - Add Root YE and Root YR to the pinned set once Apple trusts them.
-- Enroll passkeys from the app (phase 4); until then, registering one stays in Safari.
+- Enroll passkeys from the app (phase 4).
 
-### 4. Enrollment without passing codes
+### 4. Adding passkeys in the app
 
-- The administrator issues a passkey grant on the Members card, as today.
-- The member's app picks it up over the tailnet, for its own member only, so no code is passed by hand.
-- The grant is still consumed when the registration verifies, never when the app fetches it.
+The design is Part 3 of sovereignAuth's `docs/native-handoff.md`. Adding a passkey is a third kind of handoff, `enroll`: the page begins it, the app attests it, and the ephemeral sheet registers the passkey. Every enrollment that runs while Home Base is active works in the app:
+- **a first passkey,** with the administrator's grant;
+- **another passkey,** after a check in the last 5 minutes;
+- **an administrator passkey,** with the hardware key every time.
+
+Setup, recovery and activation stay in Safari, because they rest on the passphrase session.
+
+**The grant keeps its code.** The first plan was for the member's app to pick up the grant with no code. Review found that a malicious app on the member's phone could relay an attacker's own copy of the genuine app through the phone's tailnet connection, and so use the grant. The code is the step between two people that a relay can't fake. So the code stays, and the typing goes:
+- the Members card shows the code as a QR code too;
+- the launcher shows "Add a passkey" while an invitation lasts (`passkeyInvite` in `/api/home`). It scans the code, or takes it pasted, and opens Admin's Passkeys panel with the code filled in;
+- the code never arrives by a link, which another app could claim.
+
+The grant is still used up only when the registration verifies.
+
+**Built (2026-11-19), not yet checked on a phone:** sovereignAuth #14 and #15, Home Base #73–#75, and this repo's launcher card and scanner.
+
+**To check on a phone:** creating a passkey in the ephemeral sheet with iCloud Keychain, 1Password and a YubiKey (with attestation). Phase 3 measured only checks there. Where a provider can't create one in the sheet, Safari still works.
 
 **Browser features in the shell.** A household page shouldn't need to know whether it runs in Safari or in the app. Where the app's web view lacks something Safari has, the shell supplies it:
 - **The camera:** found missing with homeSource's document scan. It needs the app to declare camera use, then it's granted to household pages only.

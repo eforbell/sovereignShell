@@ -49,7 +49,8 @@ struct HomeView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await model.refresh() } }
         }
-        .fullScreenCover(item: $page) { page in
+        // Back from a page: what it changed (a passkey added, say) shows at once.
+        .fullScreenCover(item: $page, onDismiss: { Task { await model.refresh() } }) { page in
             AppBrowser(page: page, householdHosts: model.householdHosts(homeBase: address), homeBase: address) { id, host throws(HandoffError) in
                 try await agent.handoff(id: id, host: host)
             }
@@ -163,6 +164,18 @@ struct HomeView: View {
                 Text("Connected as **\(caller.name ?? caller.login)**")
                     .foregroundStyle(.secondary)
             }
+            // Only while the invitation lasts: at its end the launcher asks Home Base again, and the card goes.
+            if let invite = home.passkeyInvite, invite.expiresAt.map({ $0 > .now }) ?? true {
+                AddPasskeyCard(address: address, invite: invite) { url in
+                    page = BrowserPage(title: "Passkeys", url: url, kind: .inApp)
+                }
+                .task(id: invite.expiresAt) {
+                    guard let end = invite.expiresAt else { return }
+                    try? await Task.sleep(for: .seconds(max(0, end.timeIntervalSinceNow) + 1))
+                    guard !Task.isCancelled else { return }
+                    await model.refresh()
+                }
+            }
             if home.apps.isEmpty {
                 Notice(
                     symbol: "square.dashed",
@@ -240,7 +253,7 @@ struct HomeView: View {
             Button("Open Home Base on the web", systemImage: "globe") {
                 page = BrowserPage(title: "Home Base", url: address.url, kind: .inApp)
             }
-            // Registering a passkey, and activation, run in a browser: the app's web view can't create one.
+            // Setup, recovery and activation run in a browser: they rest on the passphrase session.
             Button("Open Admin in Safari", systemImage: "safari") {
                 safariPage = BrowserPage(title: "Admin", url: address.resolving("admin"), kind: .safari)
             }
