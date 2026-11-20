@@ -5,19 +5,23 @@ import SwiftUI
 /// from `GET /api/home`, which Home Base filters for this person; the app decides nothing about access.
 struct HomeView: View {
     let address: HomeBaseAddress
-    let changeHousehold: () -> Void
+    let households: Households
 
     @State private var model: HomeModel
     /// Passkey checks for household pages in the app's web view (the native handoff).
     @State private var agent: HandoffAgent
     @State private var page: BrowserPage?
     @State private var safariPage: BrowserPage?
-    @State private var confirmChange = false
+    @State private var showHouseholds = false
+    /// The household picked in Households, switched to once the sheet has gone.
+    @State private var chosen: HomeBaseAddress?
+    /// Forget this household, once the Households sheet has gone.
+    @State private var forgetting = false
     @Environment(\.scenePhase) private var scenePhase
 
-    init(address: HomeBaseAddress, changeHousehold: @escaping () -> Void) {
+    init(address: HomeBaseAddress, households: Households) {
         self.address = address
-        self.changeHousehold = changeHousehold
+        self.households = households
         let client = HomeBaseClient(address: address, trust: householdTrust)
         _model = State(initialValue: HomeModel(client: client))
         let presenter = HandoffSheetPresenter()
@@ -41,13 +45,17 @@ struct HomeView: View {
                     .frame(maxWidth: .infinity)
             }
             .refreshable { await model.refresh() }
-            .navigationTitle("Home Base")
+            .navigationTitle(households.known.entry(for: address)?.name ?? "Home Base")
             .toolbar { menu }
         }
         .task { await model.refresh() }
         .task(id: PollKey(interval: model.pollInterval, active: scenePhase == .active)) { await poll() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await model.refresh() } }
+        }
+        // Home Base's name for the household, kept for the household list.
+        .onChange(of: householdName, initial: true) { _, name in
+            if let name { households.name(address, name) }
         }
         // Back from a page: what it changed (a passkey added, say) shows at once.
         .fullScreenCover(item: $page, onDismiss: { Task { await model.refresh() } }) { page in
@@ -56,11 +64,21 @@ struct HomeView: View {
             }
         }
         .sheet(item: $safariPage) { page in SafariView(url: page.url).ignoresSafeArea() }
-        .confirmationDialog("Change household?", isPresented: $confirmChange, titleVisibility: .visible) {
-            Button("Change household", role: .destructive, action: changeHousehold)
-        } message: {
-            Text("This phone forgets \(address.host). Your membership in Home Base doesn't change.")
+        .sheet(isPresented: $showHouseholds, onDismiss: {
+            if forgetting {
+                forgetting = false
+                households.forget(address)
+            } else if let address = chosen {
+                chosen = nil
+                households.open(address)
+            }
+        }) {
+            HouseholdsView(current: address, households: households, choose: { chosen = $0 }, forgetCurrent: { forgetting = true })
         }
+    }
+
+    private var householdName: String? {
+        if case .loaded(let home) = model.phase { home.household } else { nil }
     }
 
     // MARK: Content
@@ -216,7 +234,7 @@ struct HomeView: View {
         }
         return Notice(symbol: "wifi.exclamationmark", title: title, message: message, detail: address.host, caller: nil) {
             retry
-            Button("Change household") { confirmChange = true }
+            Button("Households") { showHouseholds = true }
         }
     }
 
@@ -257,8 +275,22 @@ struct HomeView: View {
             Button("Open Admin in Safari", systemImage: "safari") {
                 safariPage = BrowserPage(title: "Admin", url: address.resolving("admin"), kind: .safari)
             }
+            // Other households, one tap away: switching keeps everything, so it needs no confirming.
+            let others = households.others(than: address)
+            if !others.isEmpty {
+                Section("Switch household") {
+                    ForEach(others, id: \.address) { entry in
+                        Button {
+                            households.open(entry.address)
+                        } label: {
+                            Text(entry.title)
+                            Text(entry.address.host)
+                        }
+                    }
+                }
+            }
             Divider()
-            Button("Change household…", systemImage: "arrow.left.arrow.right") { confirmChange = true }
+            Button("Households…", systemImage: "arrow.left.arrow.right") { showHouseholds = true }
         } label: {
             Label("More", systemImage: "ellipsis.circle")
         }

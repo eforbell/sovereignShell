@@ -179,7 +179,7 @@ Not yet tried on the phone: YubiKey over NFC in the sheet.
 - Push for approval prompts, using the Home Base app's own topic on the household's push gateway.
 - Widgets.
 - Per-app targets for other suite apps.
-- A switcher of recently used households, for operators who run more than one Home Base. Today "Change household" forgets the address, and switching back means typing it again.
+- Joining by a QR code: Admin's Members card, and any member's app, show `https://<Home Base host>/join`. The Join screen scans it and confirms the host; the iPhone's Camera opens a Home Base page saying how to get the app. (Next, after the household switcher.)
 
 ## What stays manual
 
