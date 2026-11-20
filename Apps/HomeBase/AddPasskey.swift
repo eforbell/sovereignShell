@@ -128,7 +128,9 @@ struct AddPasskeyCard: View {
         case .failure(.unreadable):
             // The Members card's own format, but not a code this app reads: say so rather than scan on.
             guard text.hasPrefix("sovereign-grant/") else { return false }
-            problem = "That code didn't read. Ask your administrator to issue a new one, or paste it."
+            problem = text.hasPrefix("sovereign-grant/1")
+                ? "That code didn't read. Ask your administrator to issue a new one, or paste it."
+                : "This code is from a newer Home Base. Update this app to scan it, or paste the code."
             scanning = false
             return true
         }
@@ -205,9 +207,10 @@ struct CodeScanner: UIViewControllerRepresentable {
             }
         }
 
+        // Only stopped: a swipe-down let go springs back, and viewDidAppear starts it again. done is for a
+        // code taken, or a camera that won't start.
         override func viewWillDisappear(_ animated: Bool) {
             super.viewWillDisappear(animated)
-            done = true
             scanner.stopScanning()
         }
 
