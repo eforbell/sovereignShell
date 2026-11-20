@@ -47,6 +47,8 @@ import Testing
         #expect(known.entry(for: b)?.name?.count == 60)
         #expect(known.entry(for: c)?.name == nil)
         #expect(known.entry(for: c)?.title == "c-home")
+        // Cut at 60, then trimmed: no trailing space.
+        #expect(HouseholdHome.householdName(String(repeating: "x", count: 59) + " y") == String(repeating: "x", count: 59))
     }
 
     @Test func storedRoundTrips() {
@@ -73,6 +75,7 @@ import Testing
     @Test func shortNameIsTheFirstLabel() {
         #expect(a.shortName == "a-home")
         #expect(address("localhost").shortName == "localhost")
+        #expect(address("100.64.0.2").shortName == "100.64.0.2")
     }
 
     @Test func homeCarriesTheHouseholdName() throws {

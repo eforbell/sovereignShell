@@ -151,8 +151,8 @@ public struct HouseholdHome: Decodable, Equatable, Sendable {
     public let candidateObserved: Bool?
     public let apps: [App]
     public let passkeyInvite: PasskeyInvite?
-    /// What Home Base calls the household (its administrator's name for it, or its instance), for the
-    /// household list. Absent from an older Home Base.
+    /// What Home Base calls the household (today its instance name), for the household list. Absent from
+    /// an older Home Base.
     public let household: String?
 
     private enum Keys: String, CodingKey { case state, caller, canUnlockAdmin, candidateObserved, apps, passkeyInvite, household }
@@ -187,7 +187,8 @@ public struct HouseholdHome: Decodable, Equatable, Sendable {
     static func householdName(_ raw: String?) -> String? {
         guard let raw else { return nil }
         let line = raw.split(whereSeparator: \.isNewline).joined(separator: " ").trimmingCharacters(in: .whitespaces)
-        return line.isEmpty ? nil : String(line.prefix(60))
+        let short = String(line.prefix(60)).trimmingCharacters(in: .whitespaces)
+        return short.isEmpty ? nil : short
     }
 
     /// Home Base's timestamps: ISO 8601 with milliseconds (`2026-11-19T20:36:00.000Z`), or without.

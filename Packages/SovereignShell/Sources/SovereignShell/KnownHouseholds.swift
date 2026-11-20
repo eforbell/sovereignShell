@@ -74,8 +74,10 @@ public struct KnownHouseholds: Equatable, Sendable {
 }
 
 extension HomeBaseAddress {
-    /// A short name for lists: the host's first label (`smith-homebase` for `smith-homebase.example.ts.net`).
+    /// A short name for lists: the host's first label (`smith-homebase` for `smith-homebase.example.ts.net`),
+    /// or the whole host when it's an IP address.
     public var shortName: String {
-        host.split(separator: ".").first.map(String.init) ?? host
+        if host.contains(":") || host.allSatisfy({ $0.isNumber || $0 == "." }) { return host }
+        return host.split(separator: ".").first.map(String.init) ?? host
     }
 }
