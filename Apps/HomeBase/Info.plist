@@ -21,7 +21,7 @@
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Home Base and your household's apps use the camera when you ask them to: to scan your administrator's passkey code, or a document.</string>
+	<string>Home Base and your household's apps use the camera when you ask them to: to scan your household's join code or a passkey code, or a document.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>LSRequiresIPhoneOS</key>

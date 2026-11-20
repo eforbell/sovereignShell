@@ -1,3 +1,4 @@
+import CoreImage.CIFilterBuiltins
 import SovereignShell
 import SwiftUI
 
@@ -49,6 +50,11 @@ struct HouseholdsView: View {
                     Text("Swipe left to forget a household on this phone. Your membership in it doesn't change.")
                 }
                 Section {
+                    NavigationLink {
+                        JoinCodeView(address: current, name: households.known.entry(for: current)?.title ?? current.shortName)
+                    } label: {
+                        Label("Invite someone", systemImage: "qrcode")
+                    }
                     NavigationLink {
                         JoinForm(welcome: false) { address in
                             choose(address)
@@ -105,5 +111,60 @@ private struct HouseholdRow: View {
             }
         }
         .contentShape(Rectangle())
+    }
+}
+
+/// This household's join code, for someone joining from a new phone: they scan it on the app's Join screen
+/// (or with the Camera, which opens Home Base's join page). It's only the address; the administrator still
+/// adds them.
+struct JoinCodeView: View {
+    let address: HomeBaseAddress
+    let name: String
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                Text("Join \(name)")
+                    .font(.title2.bold())
+                Text("On the new phone: connect Tailscale to the household's tailnet and install the Home Base app. Then tap Scan a join code on its Join screen and scan this. The iPhone's Camera opens the join page too.")
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                if let code = Self.qrCode(JoinCode.url(for: address).absoluteString) {
+                    Image(uiImage: code)
+                        .interpolation(.none)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: 260)
+                        .padding(16)
+                        .background(.white, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .accessibilityLabel("Join code for \(name)")
+                }
+                Text(address.typed)
+                    .font(.footnote.monospaced())
+                    .textSelection(.enabled)
+                ShareLink(item: JoinCode.url(for: address)) {
+                    Label("Share the join link", systemImage: "square.and.arrow.up")
+                }
+                Text("After they join, an administrator adds them in Admin → Members.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .padding()
+            .frame(maxWidth: .infinity)
+        }
+        .navigationTitle("Invite someone")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    /// Dark modules on white, sharp at any size.
+    static func qrCode(_ text: String) -> UIImage? {
+        let filter = CIFilter.qrCodeGenerator()
+        filter.message = Data(text.utf8)
+        filter.correctionLevel = "M"
+        guard let image = filter.outputImage?.transformed(by: CGAffineTransform(scaleX: 10, y: 10)),
+              let pixels = CIContext().createCGImage(image, from: image.extent)
+        else { return nil }
+        return UIImage(cgImage: pixels)
     }
 }
