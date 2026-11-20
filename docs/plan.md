@@ -156,14 +156,18 @@ Setup, recovery and activation stay in Safari, because they rest on the passphra
 
 **The grant keeps its code.** The first plan was for the member's app to pick up the grant with no code. Review found that a malicious app on the member's phone could relay an attacker's own copy of the genuine app through the phone's tailnet connection, and so use the grant. The code is the step between two people that a relay can't fake. So the code stays, and the typing goes:
 - the Members card shows the code as a QR code too;
-- the launcher shows "Add a passkey" while an invitation lasts (`passkeyInvite` in `/api/home`). It scans the code, or takes it pasted, and opens Admin's Passkeys panel with the code filled in;
+- the launcher shows "Add a passkey" while an invitation lasts (`passkeyInvite` in `/api/home`). It scans the code, or takes it pasted, and opens Admin with the code filled in, showing only a focused "Add your passkey" page (Home Base #76);
 - the code never arrives by a link, which another app could claim.
 
 The grant is still used up only when the registration verifies.
 
-**Built (2026-11-19), not yet checked on a phone:** sovereignAuth #14 and #15, Home Base #73–#75, and this repo's launcher card and scanner.
+**Built (2026-11-19):** sovereignAuth #14 and #15, Home Base #73–#76, and this repo's launcher card and scanner.
 
-**To check on a phone:** creating a passkey in the ephemeral sheet with iCloud Keychain, 1Password and a YubiKey (with attestation). Phase 3 measured only checks there. Where a provider can't create one in the sheet, Safari still works.
+**Verified on a phone (2026-11-20, rehearsal Home Base):** a member with no passkey saw the launcher card, scanned the administrator's code (the camera prompt came first), and the app opened Admin's focused "Add your passkey" page (Home Base #76) with the code filled in. The passkey was created in the sheet with iCloud Keychain and the grant was used up.
+
+Also verified: creating a passkey in the sheet with 1Password; adding more passkeys from the Passkeys panel after a recent check; and an administrator's passkey on a YubiKey with hardware attestation, through the every-time check. Where a provider can't create one in the sheet, Safari still works.
+
+Not yet tried on the phone: YubiKey over NFC in the sheet.
 
 **Browser features in the shell.** A household page shouldn't need to know whether it runs in Safari or in the app. Where the app's web view lacks something Safari has, the shell supplies it:
 - **The camera:** found missing with homeSource's document scan. It needs the app to declare camera use, then it's granted to household pages only.
