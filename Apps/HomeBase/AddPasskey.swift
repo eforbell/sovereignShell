@@ -93,6 +93,10 @@ struct AddPasskeyCard: View {
         case .notDetermined:
             guard await AVCaptureDevice.requestAccess(for: .video) else { return deny() }
             cameraDenied = false
+        case .restricted:
+            // Screen Time, say: Settings can't change it here.
+            problem = "The camera is restricted on this phone. Paste the code instead."
+            return
         default:
             return deny()
         }
@@ -122,7 +126,11 @@ struct AddPasskeyCard: View {
             scanning = false
             return true
         case .failure(.unreadable):
-            return false
+            // The Members card's own format, but not a code this app reads: say so rather than scan on.
+            guard text.hasPrefix("sovereign-grant/") else { return false }
+            problem = "That code didn't read. Ask your administrator to issue a new one, or paste it."
+            scanning = false
+            return true
         }
     }
 
@@ -143,49 +151,65 @@ struct AddPasskeyCard: View {
     }
 }
 
-/// The camera, reading QR codes until `accept` takes one. Scanning starts once the scanner is on screen;
-/// if it can't, `failed` says why.
+/// The camera, reading QR codes until `accept` takes one. Scanning starts when the scanner is on screen
+/// (viewDidAppear) and stops when it leaves; if it can't start, `failed` says why.
 struct CodeScanner: UIViewControllerRepresentable {
     let accept: (String) -> Bool
     let failed: (String) -> Void
 
-    func makeUIViewController(context: Context) -> DataScannerViewController {
-        let scanner = DataScannerViewController(
+    func makeUIViewController(context: Context) -> ScannerHost {
+        ScannerHost(accept: accept, failed: failed)
+    }
+
+    func updateUIViewController(_ host: ScannerHost, context: Context) {}
+
+    /// Hosts VisionKit's scanner (which can't be subclassed) to start it at the right moment.
+    final class ScannerHost: UIViewController, DataScannerViewControllerDelegate {
+        private let scanner = DataScannerViewController(
             recognizedDataTypes: [.barcode(symbologies: [.qr])],
             qualityLevel: .balanced,
             recognizesMultipleItems: false,
             isHighFrameRateTrackingEnabled: false,
             isHighlightingEnabled: true
         )
-        scanner.delegate = context.coordinator
-        return scanner
-    }
+        private let accept: (String) -> Bool
+        private let failed: (String) -> Void
+        private var done = false
 
-    func updateUIViewController(_ scanner: DataScannerViewController, context: Context) {
-        guard !context.coordinator.started else { return }
-        context.coordinator.started = true
-        // After this update, when the sheet has put the scanner on screen.
-        Task { @MainActor in
+        init(accept: @escaping (String) -> Bool, failed: @escaping (String) -> Void) {
+            self.accept = accept
+            self.failed = failed
+            super.init(nibName: nil, bundle: nil)
+        }
+
+        @available(*, unavailable) required init?(coder: NSCoder) { fatalError("not from a storyboard") }
+
+        override func viewDidLoad() {
+            super.viewDidLoad()
+            scanner.delegate = self
+            addChild(scanner)
+            scanner.view.frame = view.bounds
+            scanner.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            view.addSubview(scanner.view)
+            scanner.didMove(toParent: self)
+        }
+
+        override func viewDidAppear(_ animated: Bool) {
+            super.viewDidAppear(animated)
+            guard !done, !scanner.isScanning else { return }
             do {
                 try scanner.startScanning()
             } catch {
+                done = true
                 failed("The camera couldn't start (\(error.localizedDescription)). Paste the code instead.")
             }
         }
-    }
 
-    static func dismantleUIViewController(_ scanner: DataScannerViewController, coordinator: Coordinator) {
-        coordinator.done = true
-        scanner.stopScanning()
-    }
-
-    func makeCoordinator() -> Coordinator { Coordinator(accept: accept) }
-
-    @MainActor final class Coordinator: NSObject, DataScannerViewControllerDelegate {
-        let accept: (String) -> Bool
-        var started = false
-        var done = false
-        init(accept: @escaping (String) -> Bool) { self.accept = accept }
+        override func viewWillDisappear(_ animated: Bool) {
+            super.viewWillDisappear(animated)
+            done = true
+            scanner.stopScanning()
+        }
 
         func dataScanner(_ scanner: DataScannerViewController, didAdd items: [RecognizedItem], allItems: [RecognizedItem]) {
             guard !done else { return }
