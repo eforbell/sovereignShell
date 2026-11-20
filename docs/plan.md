@@ -161,9 +161,11 @@ Setup, recovery and activation stay in Safari, because they rest on the passphra
 
 The grant is still used up only when the registration verifies.
 
-**Built (2026-11-19), not yet checked on a phone:** sovereignAuth #14 and #15, Home Base #73–#75, and this repo's launcher card and scanner.
+**Built (2026-11-19):** sovereignAuth #14 and #15, Home Base #73–#76, and this repo's launcher card and scanner.
 
-**To check on a phone:** creating a passkey in the ephemeral sheet with iCloud Keychain, 1Password and a YubiKey (with attestation). Phase 3 measured only checks there. Where a provider can't create one in the sheet, Safari still works.
+**Verified on a phone (2026-11-20, rehearsal Home Base):** a member with no passkey saw the launcher card, scanned the administrator's code (the camera prompt came first), and the app opened Admin's focused "Add your passkey" page (Home Base #76) with the code filled in. The passkey was created in the sheet with iCloud Keychain and the grant was used up.
+
+**Still to check on a phone:** creating a passkey in the sheet with 1Password and a YubiKey (with attestation), adding a second passkey from the Passkeys panel, and an administrator's passkey. Where a provider can't create one in the sheet, Safari still works.
 
 **Browser features in the shell.** A household page shouldn't need to know whether it runs in Safari or in the app. Where the app's web view lacks something Safari has, the shell supplies it:
 - **The camera:** found missing with homeSource's document scan. It needs the app to declare camera use, then it's granted to household pages only.
