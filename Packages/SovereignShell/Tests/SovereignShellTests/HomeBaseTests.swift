@@ -109,3 +109,41 @@ import Testing
     }
 }
 
+
+@Suite struct PasskeyInviteTests {
+    private let address = HomeBaseAddress("smith-homebase.example-tailnet.ts.net")!
+
+    @Test func decodesTheInviteAndItsExpiry() throws {
+        let home = try JSONDecoder().decode(HouseholdHome.self, from: Data(#"{"state":"member","caller":{"login":"kid@example.com"},"canUnlockAdmin":false,"apps":[],"passkeyInvite":{"expiresAt":"2026-11-19T20:36:00.000Z"}}"#.utf8))
+        #expect(home.passkeyInvite?.expiresAt == Date(timeIntervalSince1970: 1_795_120_560))
+        let none = try JSONDecoder().decode(HouseholdHome.self, from: Data(#"{"state":"member","apps":[]}"#.utf8))
+        #expect(none.passkeyInvite == nil)
+        let odd = try JSONDecoder().decode(HouseholdHome.self, from: Data(#"{"state":"member","apps":[],"passkeyInvite":{"expiresAt":42}}"#.utf8))
+        #expect(odd.passkeyInvite == nil, "a field that doesn't read never breaks the launcher")
+    }
+
+    @Test func scannedCodeForThisHousehold() {
+        let scanned = EnrollmentCode.parse("sovereign-grant/1\nsmith-homebase.example-tailnet.ts.net\noIyLcsPf5vbG94TsrgvH4g", for: address)
+        #expect(scanned == .success(EnrollmentCode(value: "oIyLcsPf5vbG94TsrgvH4g")))
+        #expect(EnrollmentCode.parse("sovereign-grant/1\nSMITH-HOMEBASE.example-tailnet.ts.net\noIyLcsPf5vbG94TsrgvH4g\n", for: address) == scanned)
+    }
+
+    @Test func scannedCodeForAnotherHousehold() {
+        let other = EnrollmentCode.parse("sovereign-grant/1\njones-homebase.example-tailnet.ts.net\noIyLcsPf5vbG94TsrgvH4g", for: address)
+        #expect(other == .failure(.otherHousehold("jones-homebase.example-tailnet.ts.net")))
+    }
+
+    @Test func pastedCode() {
+        #expect(EnrollmentCode.parse("  oIyLcsPf5vbG94TsrgvH4g \n", for: address) == .success(EnrollmentCode(value: "oIyLcsPf5vbG94TsrgvH4g")))
+    }
+
+    @Test(arguments: ["", "short", "has spaces in it", "https://example.com/?grant=abc", "sovereign-grant/2\nsmith-homebase.example-tailnet.ts.net\noIyLcsPf5vbG94TsrgvH4g", "sovereign-grant/1\nsmith-homebase.example-tailnet.ts.net\n<script>", "a\nb"])
+    func notACode(_ text: String) {
+        #expect(EnrollmentCode.parse(text, for: address) == .failure(.unreadable))
+    }
+
+    @Test func opensAdminWithTheCodeInTheFragment() {
+        let url = address.addPasskey(code: EnrollmentCode(value: "oIyLcsPf5vbG94TsrgvH4g"))
+        #expect(url.absoluteString == "https://smith-homebase.example-tailnet.ts.net/admin#grant=oIyLcsPf5vbG94TsrgvH4g")
+    }
+}

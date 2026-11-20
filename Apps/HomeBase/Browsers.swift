@@ -36,8 +36,8 @@ struct AppBrowser: View {
     }
 }
 
-/// Safari's own view, for what the app's web view can't do: registering a passkey, which is scoped to the
-/// tailnet domain (docs/plan.md). Checks go through the handoff's sheet instead.
+/// Safari's own view, for what stays in a browser: Admin during setup and recovery (docs/plan.md). Checks and
+/// adding passkeys go through the handoff's sheet instead.
 struct SafariView: UIViewControllerRepresentable {
     let url: URL
     func makeUIViewController(context: Context) -> SFSafariViewController { SFSafariViewController(url: url) }

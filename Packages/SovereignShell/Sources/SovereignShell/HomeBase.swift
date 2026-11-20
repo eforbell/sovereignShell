@@ -44,6 +44,53 @@ public struct HomeBaseAddress: Hashable, Codable, Sendable {
     public func resolving(_ path: String) -> URL {
         url.appending(path: path)
     }
+
+    /// Admin's Passkeys panel with a first passkey's enrollment code filled in: `admin#grant=<code>`. The
+    /// code rides in the fragment, which the page takes and clears at once and which never reaches a server.
+    public func addPasskey(code: EnrollmentCode) -> URL {
+        var parts = URLComponents(url: resolving("admin"), resolvingAgainstBaseURL: false)!
+        parts.fragment = "grant=\(code.value)"
+        return parts.url!
+    }
+}
+
+/// A first passkey's enrollment code, as the administrator's Members card gives it: scanned from its QR code
+/// (`sovereign-grant/1`, Home Base's hostname and the code, on three lines) or pasted as the code alone. The
+/// code grants nothing by itself: the app still runs the passkey sheet with it, and only for its own
+/// household (sovereignAuth docs/native-handoff.md, Part 3, "The grant keeps its code"). It never arrives
+/// by a link: another app could claim the link and keep the code.
+public struct EnrollmentCode: Equatable, Sendable {
+    public let value: String
+
+    public enum Problem: Error, Equatable, Sendable {
+        /// A code for another household's Home Base, named by its hostname.
+        case otherHousehold(String)
+        /// Not an enrollment code.
+        case unreadable
+    }
+
+    /// 8 to 64 base64url characters (Home Base's are 22).
+    static func isCode(_ text: String) -> Bool {
+        (8...64).contains(text.count) && text.unicodeScalars.allSatisfy { $0.isASCII && (CharacterSet.alphanumerics.contains($0) || $0 == "-" || $0 == "_") }
+    }
+
+    /// The code in `text`, for the household at `address`.
+    public static func parse(_ text: String, for address: HomeBaseAddress) -> Result<EnrollmentCode, Problem> {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lines = trimmed.split(separator: "\n", omittingEmptySubsequences: false).map { $0.trimmingCharacters(in: .whitespaces) }
+        let code: String
+        if lines.count == 3, lines[0] == "sovereign-grant/1" {
+            let host = lines[1].lowercased()
+            guard host == address.host else { return .failure(.otherHousehold(host)) }
+            code = lines[2]
+        } else if lines.count == 1 {
+            code = lines[0]
+        } else {
+            return .failure(.unreadable)
+        }
+        guard isCode(code) else { return .failure(.unreadable) }
+        return .success(EnrollmentCode(value: code))
+    }
 }
 
 /// What `GET /api/home` says about the caller. Home Base filters it on the server; the app only renders it.
@@ -74,6 +121,12 @@ public struct HouseholdHome: Decodable, Equatable, Sendable {
         public let login: String
     }
 
+    /// A first passkey the administrator invited this member to add, until `expiresAt`. Never the code: the
+    /// administrator gives them that.
+    public struct PasskeyInvite: Equatable, Sendable {
+        public let expiresAt: Date?
+    }
+
     public struct App: Decodable, Equatable, Identifiable, Sendable {
         public let id: String
         public let name: String
@@ -86,8 +139,10 @@ public struct HouseholdHome: Decodable, Equatable, Sendable {
     public let canUnlockAdmin: Bool
     public let candidateObserved: Bool?
     public let apps: [App]
+    public let passkeyInvite: PasskeyInvite?
 
-    private enum Keys: String, CodingKey { case state, caller, canUnlockAdmin, candidateObserved, apps }
+    private enum Keys: String, CodingKey { case state, caller, canUnlockAdmin, candidateObserved, apps, passkeyInvite }
+    private struct RawInvite: Decodable { let expiresAt: String? }
 
     /// Loose on purpose: a field Home Base adds later never breaks an installed app, and one bad app entry
     /// drops that entry rather than the whole launcher. Only http(s) app links are kept.
@@ -99,6 +154,17 @@ public struct HouseholdHome: Decodable, Equatable, Sendable {
         candidateObserved = try? c.decodeIfPresent(Bool.self, forKey: .candidateObserved)
         let raw = (try? c.decodeIfPresent([LossyApp].self, forKey: .apps)) ?? []
         apps = raw.compactMap(\.app)
+        if let invite = try? c.decodeIfPresent(RawInvite.self, forKey: .passkeyInvite) {
+            passkeyInvite = PasskeyInvite(expiresAt: invite.expiresAt.flatMap(Self.timestamp))
+        } else {
+            passkeyInvite = nil
+        }
+    }
+
+    /// Home Base's timestamps: ISO 8601 with milliseconds (`2026-11-19T20:36:00.000Z`), or without.
+    static func timestamp(_ text: String) -> Date? {
+        (try? Date(text, strategy: .iso8601.year().month().day().time(includingFractionalSeconds: true)))
+            ?? (try? Date(text, strategy: .iso8601))
     }
 
     private struct LossyApp: Decodable {
