@@ -151,8 +151,11 @@ public struct HouseholdHome: Decodable, Equatable, Sendable {
     public let candidateObserved: Bool?
     public let apps: [App]
     public let passkeyInvite: PasskeyInvite?
+    /// What Home Base calls the household (today its instance name), for the household list. Absent from
+    /// an older Home Base.
+    public let household: String?
 
-    private enum Keys: String, CodingKey { case state, caller, canUnlockAdmin, candidateObserved, apps, passkeyInvite }
+    private enum Keys: String, CodingKey { case state, caller, canUnlockAdmin, candidateObserved, apps, passkeyInvite, household }
     /// Loose: an expiry that doesn't read leaves the invitation, without one.
     private struct RawInvite: Decodable {
         let expiresAt: String?
@@ -177,6 +180,15 @@ public struct HouseholdHome: Decodable, Equatable, Sendable {
         } else {
             passkeyInvite = nil
         }
+        household = Self.householdName(try? c.decodeIfPresent(String.self, forKey: .household))
+    }
+
+    /// A household name fit for a list: trimmed, on one line, at most 60 characters; nil when there's none.
+    static func householdName(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        let line = raw.split(whereSeparator: \.isNewline).joined(separator: " ").trimmingCharacters(in: .whitespaces)
+        let short = String(line.prefix(60)).trimmingCharacters(in: .whitespaces)
+        return short.isEmpty ? nil : short
     }
 
     /// Home Base's timestamps: ISO 8601 with milliseconds (`2026-11-19T20:36:00.000Z`), or without.
